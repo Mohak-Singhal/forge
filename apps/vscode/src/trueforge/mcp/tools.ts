@@ -31,6 +31,7 @@ export interface WorkspaceContext {
 }
 
 const proposals = new Map<string, EditProposal>()
+export const undoSnapshots = new Map<string, { path: string; before: string; after: string }>()
 
 export function stageProposal(ctx: WorkspaceContext, input: { path?: unknown; edits?: unknown; summary?: unknown }): EditProposal {
 	const path = typeof input.path === "string" ? input.path.trim() : ""
@@ -262,7 +263,7 @@ export const TOOL_NAMES = [
 	"editor_retrieve",
 	"editor_run_command",
 	"editor_propose_edit",
-	"editor_apply_staged",
+	"editor_diagnostics",
 ] as const
 
 export type EditorToolName = (typeof TOOL_NAMES)[number]
@@ -284,23 +285,41 @@ export async function callEditorTool(name: string, rawArgs: Record<string, unkno
 		case "editor_run_command":
 			return runCommand(ctx, rawArgs)
 		case "editor_propose_edit": {
+			// Called only AFTER TF's approval pause was answered allow — apply immediately.
 			const proposal = stageProposal(ctx, rawArgs)
-			return JSON.stringify({
-				status: "staged",
-				proposalId: proposal.id,
-				path: proposal.path,
-				hunks: proposal.hunks.length,
-				baseHash: proposal.baseHash,
-				hint: "The user reviewed this proposal in the editor (approve/deny in the diff UI). On approval the hunks are applied; on rejection the model receives a denial and should not retry.",
-			})
-		}
-		case "editor_apply_staged": {
-			const proposalId = typeof rawArgs.proposalId === "string" ? rawArgs.proposalId : ""
-			if (!proposalId) {
-				throw new Error("editor_apply_staged: `proposalId` is required")
+			const before = readFileSyncSafe(resolve(ctx.root, proposal.path))
+			const applied = applyHunks(before, proposal.hunks)
+			if (!applied.proposed) {
+				return JSON.stringify({ status: "rejected", path: proposal.path, applied: applied.applied, rejected: applied.rejected })
 			}
-			const result = await applyProposal(ctx, proposalId)
-			return JSON.stringify(result)
+			// Snapshot for undo before writing.
+			undoSnapshots.set(proposal.id, { path: proposal.path, before, after: applied.proposed })
+			const { writeFile } = await import("node:fs/promises")
+			await writeFile(resolve(ctx.root, proposal.path), applied.proposed, "utf8")
+			return JSON.stringify({ status: "applied", path: proposal.path, proposalId: proposal.id, hunks: applied.applied, bytes: applied.proposed.length })
+		}
+		case "editor_diagnostics": {
+			const path = typeof rawArgs.path === "string" ? rawArgs.path : ""
+			if (!path) {
+				throw new Error("editor_diagnostics: `path` is required")
+			}
+			const abs = resolve(ctx.root, path)
+			const { execFile } = await import("node:child_process")
+			const pyFiles = abs.endsWith(".py") ? [abs] : walkForSearch(ctx.root, 10000).filter(f => f.endsWith(".py")).slice(0, 20)
+			const errors: string[] = []
+			for (const file of pyFiles) {
+				const rel = relative(ctx.root, file).split("\\").join("/")
+				const err = await new Promise<string>((resolveP) => {
+					execFile("python3", ["-m", "py_compile", file], (e) => {
+						if (!e) return resolveP("")
+						resolveP("syntax error")
+					})
+				})
+				if (err) {
+					errors.push(`${rel}: ${err}`)
+				}
+			}
+			return errors.length === 0 ? "diagnostics: no Python syntax errors" : `diagnostics: ${errors.length} file(s) with syntax errors:\n${errors.join("\n")}`
 		}
 		default:
 			throw new Error(`unknown tool: ${name}`)

@@ -28,6 +28,12 @@ export interface SdkSessionLifecycleOptions {
 	mcpHub: McpHub
 	requestToolApproval: RequestToolApprovalHandler
 	askQuestion: AskQuestionHandler
+	/** Forge engine for this repo's demo path. "trueforge" drives sessions through the local TrueForge server. */
+	forgeEngine?: "cline-sdk" | "trueforge"
+	/** Path to the extension install root (used to locate the committed agent definition). */
+	extensionPath?: string
+	/** TrueForge base URL (defaults to http://localhost:8790). */
+	trueforgeUrl?: string
 	/** Custom `editor` executor (diff-view edit pipeline); replaces the SDK's disk writer. */
 	editorExecutor?: EditorExecutorHandler
 	/** Custom `apply_patch` executor (reverts the diff preview, then applies via the SDK default). */
@@ -478,6 +484,27 @@ export class SdkSessionLifecycle {
 		if (!this.sharedHostPromise) {
 			// Host-lifetime dependencies only. Anything task/session-specific must be
 			// supplied to sdkHost.start(...), otherwise it can leak across reused sessions.
+			if (this.options.forgeEngine === "trueforge") {
+				// Engine swap: sessions and turns run on the local TrueForge server;
+				// editor capabilities are exposed to the agent as MCP tools (./mcp/server).
+				const { TrueForgeSessionHost } = require("@/trueforge/trueforge-session-host")
+				const pendingHost = TrueForgeSessionHost.create({
+					extensionPath: this.options.extensionPath ?? "",
+					trueforgeUrl: this.options.trueforgeUrl,
+					requestToolApproval: this.options.requestToolApproval,
+					askQuestion: this.options.askQuestion,
+				})
+					.then((sdkHost: SdkSessionHost) => {
+						this.ensureSharedHostSubscription(sdkHost)
+						this.sharedHost = sdkHost
+						return sdkHost
+					})
+					.finally(() => {
+						this.sharedHostPromise = undefined
+					})
+				this.sharedHostPromise = pendingHost
+				return pendingHost
+			}
 			this.sharedHostPromise = VscodeSessionHost.create({
 				mcpHub: this.options.mcpHub,
 				requestToolApproval: this.options.requestToolApproval,

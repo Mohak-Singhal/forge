@@ -424,6 +424,11 @@ export class Controller {
 		this.sessions = new SdkSessionLifecycle({
 			mcpHub: this.mcpHub,
 			telemetry: this.sdkTelemetry.telemetry,
+			// Forge: engine swap — TrueForge drives the agent loop; the editor only
+			// exposes capabilities to the agent as MCP tools.
+			forgeEngine: "trueforge",
+			extensionPath: this.context.extensionPath,
+			trueforgeUrl: process.env.TRUEFORGE_URL,
 			requestToolApproval: (request) => this.interactions.handleRequestToolApproval(request),
 			askQuestion: (question, options, context) => this.interactions.handleAskQuestion(question, options, context),
 			editorExecutor: (input, cwd, context) => this.diffEdits.executeEditorTool(input, cwd, context),

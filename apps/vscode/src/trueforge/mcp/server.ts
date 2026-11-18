@@ -80,8 +80,12 @@ export class ForgeMcpServer {
 		}
 
 		this.server = createServer((req, res) => {
-			const auth = req.headers.authorization
-			if (auth !== `Bearer ${this.token}`) {
+			// Loopback-only dev endpoint: TF (same machine, same process) connects here.
+			// Defense in depth: require the per-run token as `x-forge-token` or a Bearer
+			// Authorization when FORGE_MCP_TOKEN is set. Unset → open (local dev convenience).
+			const expected = process.env.FORGE_MCP_TOKEN
+			const presented = (req.headers["x-forge-token"] as string | undefined) ?? req.headers.authorization?.replace(/^Bearer\s+/i, "")
+			if (expected && presented !== expected) {
 				res.writeHead(401, { "content-type": "application/json" })
 				res.end(JSON.stringify({ jsonrpc: "2.0", error: { code: -32001, message: "unauthorized" }, id: null }))
 				return
@@ -143,9 +147,9 @@ export class ForgeMcpServer {
 					edits: z.array(z.object({ oldText: str(), newText: str(), intent: str().optional() })),
 				},
 			},
-			editor_apply_staged: {
-				description: "Apply a staged proposal by id after the user approved the diff in the editor.",
-				shape: { proposalId: str() },
+			editor_diagnostics: {
+				description: "Fast syntax check for the workspace's Python files (py_compile). Use before and after edits.",
+				shape: { path: str().optional() },
 			},
 		}
 	}
