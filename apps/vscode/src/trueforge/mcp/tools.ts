@@ -13,8 +13,11 @@ import { spawn } from "node:child_process"
 import { constants as fsConstants } from "node:fs"
 import { access, readFile } from "node:fs/promises"
 import { relative, resolve } from "node:path"
-import { applyHunks, type EditHunk, sha256 } from "../edits"
 import { Logger } from "@shared/services/Logger"
+import { estimateTokens, formatPackedContext, packContext } from "../context-budget"
+import { applyHunks, type EditHunk, sha256 } from "../edits"
+import { proposalKey, takeHunkDecisions } from "../hunk-review"
+import { formatMentionContext, parseMentionRange, parseMentions, resolveFileMention } from "../mentions"
 import { buildRepoMap, retrieveCode } from "../retrieval"
 
 export interface EditProposal {
@@ -34,7 +37,10 @@ export interface WorkspaceContext {
 const proposals = new Map<string, EditProposal>()
 export const undoSnapshots = new Map<string, { path: string; before: string; after: string }>()
 
-export function stageProposal(ctx: WorkspaceContext, input: { path?: unknown; edits?: unknown; summary?: unknown }): EditProposal {
+export function stageProposal(
+	ctx: WorkspaceContext,
+	input: { path?: unknown; edits?: unknown; summary?: unknown },
+): EditProposal {
 	const path = typeof input.path === "string" ? input.path.trim() : ""
 	if (!path) {
 		throw new Error("editor_propose_edit requires a non-empty `path`")
@@ -52,7 +58,11 @@ export function stageProposal(ctx: WorkspaceContext, input: { path?: unknown; ed
 		if (typeof candidate.oldText !== "string" || typeof candidate.newText !== "string") {
 			throw new Error(`editor_propose_edit: edit ${index} needs oldText and newText (strings)`)
 		}
-		hunks.push({ oldText: candidate.oldText, newText: candidate.newText, intent: typeof candidate.intent === "string" ? candidate.intent : undefined })
+		hunks.push({
+			oldText: candidate.oldText,
+			newText: candidate.newText,
+			intent: typeof candidate.intent === "string" ? candidate.intent : undefined,
+		})
 	}
 	if (hunks.length === 0) {
 		throw new Error("editor_propose_edit: at least one edit hunk is required")
@@ -74,7 +84,10 @@ export function getProposal(id: string): EditProposal | undefined {
 	return proposals.get(id)
 }
 
-export async function applyProposal(ctx: WorkspaceContext, id: string): Promise<{ path: string; applied: number; rejected: Array<{ hunk: number; reason: string }> }> {
+export async function applyProposal(
+	ctx: WorkspaceContext,
+	id: string,
+): Promise<{ path: string; applied: number; rejected: Array<{ hunk: number; reason: string }> }> {
 	const proposal = proposals.get(id)
 	if (!proposal) {
 		throw new Error(`editor_apply_staged: unknown proposal id ${id}`)
@@ -141,7 +154,8 @@ async function readToolFile(ctx: WorkspaceContext, args: Record<string, unknown>
 	const content = await readFile(abs, "utf8")
 	const lines = content.split("\n")
 	const startLine = typeof args.start_line === "number" ? Math.max(1, args.start_line) : 1
-	const endLine = typeof args.end_line === "number" ? Math.min(lines.length, args.end_line) : Math.min(lines.length, startLine + 397)
+	const endLine =
+		typeof args.end_line === "number" ? Math.min(lines.length, args.end_line) : Math.min(lines.length, startLine + 397)
 	const slice = lines.slice(startLine - 1, endLine)
 	return `# ${path} (lines ${startLine}-${endLine} of ${lines.length})\n${slice.map((line, i) => `${startLine + i}\t${line}`).join("\n")}`
 }
@@ -156,7 +170,12 @@ interface SearchArgs {
 
 async function searchText(ctx: WorkspaceContext, args: Record<string, unknown>): Promise<string> {
 	const input = args as SearchArgs
-	const pattern = typeof input.pattern === "string" && input.pattern.trim() ? input.pattern : typeof input.query === "string" ? input.query : ""
+	const pattern =
+		typeof input.pattern === "string" && input.pattern.trim()
+			? input.pattern
+			: typeof input.query === "string"
+				? input.query
+				: ""
 	if (!pattern.trim()) {
 		throw new Error("editor_search: `pattern` (or `query`) is required")
 	}
@@ -293,13 +312,175 @@ function runCommand(ctx: WorkspaceContext, args: Record<string, unknown>): Promi
 		child.on("close", (code, signal) => {
 			clearTimeout(timer)
 			const combined = `${stdout}${stderr ? `\n${stderr}` : ""}`.trim()
-			const tail = combined.length > MAX_OUTPUT_BYTES ? `…[truncated ${combined.length - MAX_OUTPUT_BYTES} bytes]\n${combined.slice(-MAX_OUTPUT_BYTES)}` : combined
+			const tail =
+				combined.length > MAX_OUTPUT_BYTES
+					? `…[truncated ${combined.length - MAX_OUTPUT_BYTES} bytes]\n${combined.slice(-MAX_OUTPUT_BYTES)}`
+					: combined
 			Logger.log(`[Forge] editor_run_command done: code=${code} signal=${signal} bytes=${combined.length}`)
 			resolvePromise(`exit code: ${code ?? 0}\n${tail || "(no output)"}`)
 		})
 	})
 }
 
+/**
+ * Resolve `@file` / `@symbol` mentions against the workspace and render them as a
+ * ground-truth block. Explicit mentions are never ranked and never evicted: a user
+ * naming a file outranks any retrieval score, so this block goes ahead of the prompt
+ * instead of competing with retrieved chunks for the budget.
+ */
+export function resolveMentionContext(
+	ctx: WorkspaceContext,
+	prompt: string,
+	budgetTokens = 6000,
+): { contextText: string; promptText: string; files: string[]; symbols: string[] } {
+	const mentions = parseMentions(prompt)
+	if (mentions.files.length === 0 && mentions.symbols.length === 0) {
+		return { contextText: "", promptText: prompt, files: [], symbols: [] }
+	}
+
+	const root = realpathSyncSafe(ctx.root)
+	const knownPaths = walkForSearch(root)
+		.map((file) => relative(root, file).split("\\").join("/"))
+		.filter((path) => !path.startsWith(".."))
+
+	const resolved: Array<{
+		kind: "file" | "symbol"
+		label: string
+		path: string
+		startLine: number
+		endLine: number
+		text: string
+	}> = []
+	const unresolved: string[] = []
+	let remaining = budgetTokens
+
+	for (const raw of mentions.files) {
+		const { path: mentionPath, startLine, endLine } = parseMentionRange(raw)
+		const match = resolveFileMention(mentionPath, knownPaths)
+		if (!match) {
+			unresolved.push(raw)
+			continue
+		}
+		const abs = resolve(root, match)
+		let content = ""
+		try {
+			content = readFileSyncSafe(abs)
+		} catch {
+			unresolved.push(raw)
+			continue
+		}
+		const lines = content.split("\n")
+		const from = startLine ?? 1
+		const to = endLine ?? Math.min(lines.length, from + 399)
+		const body = lines
+			.slice(from - 1, to)
+			.map((line, index) => `${from + index}\t${line}`)
+			.join("\n")
+		const cost = estimateTokens(body)
+		if (cost > remaining) {
+			unresolved.push(`${raw} (does not fit the remaining mention budget)`)
+			continue
+		}
+		remaining -= cost
+		resolved.push({ kind: "file", label: raw, path: match, startLine: from, endLine: to, text: body })
+	}
+
+	// Symbols: find the definition line, then include that definition's body.
+	for (const symbol of mentions.symbols) {
+		const definition = findSymbolDefinition(root, knownPaths, symbol)
+		if (!definition) {
+			unresolved.push(symbol)
+			continue
+		}
+		const cost = estimateTokens(definition.text)
+		if (cost > remaining) {
+			unresolved.push(`${symbol} (does not fit the remaining mention budget)`)
+			continue
+		}
+		remaining -= cost
+		resolved.push({ kind: "symbol", label: symbol, ...definition })
+	}
+
+	const usedTokens = budgetTokens - remaining
+	return {
+		contextText: formatMentionContext(mentions, resolved, unresolved, usedTokens, budgetTokens),
+		promptText: mentions.text || prompt,
+		files: mentions.files,
+		symbols: mentions.symbols,
+	}
+}
+
+/** Locate `def name` / `class name` / `function name` and take a bounded body. */
+function findSymbolDefinition(
+	root: string,
+	knownPaths: string[],
+	symbol: string,
+	maxLines = 120,
+): { path: string; startLine: number; endLine: number; text: string } | undefined {
+	const escaped = symbol.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+	const pattern = new RegExp(
+		`^\\s*(?:export\\s+)?(?:async\\s+)?(?:def|class|function|interface|type|const|let|var)\\s+${escaped}\\b`,
+	)
+	for (const path of knownPaths) {
+		if (!/\.(py|ts|tsx|js|jsx|rs|go)$/.test(path)) {
+			continue
+		}
+		let content = ""
+		try {
+			content = readFileSyncSafe(resolve(root, path))
+		} catch {
+			continue
+		}
+		const lines = content.split("\n")
+		for (const [index, line] of lines.entries()) {
+			if (!pattern.test(line)) {
+				continue
+			}
+			const startLine = index + 1
+			// Take the definition plus its indented body, stopping at the next
+			// same-or-higher-indent definition or after maxLines.
+			const baseIndent = line.length - line.trimStart().length
+			let endLine = Math.min(lines.length, startLine + maxLines - 1)
+			for (let probe = index + 1; probe < lines.length && probe < index + maxLines; probe++) {
+				const candidate = lines[probe]
+				if (!candidate.trim()) {
+					continue
+				}
+				const indent = candidate.length - candidate.trimStart().length
+				if (indent <= baseIndent && /^\s*(?:export\s+)?(?:async\s+)?(?:def|class|function)/.test(candidate)) {
+					endLine = probe
+					break
+				}
+			}
+			const body = lines
+				.slice(startLine - 1, endLine)
+				.map((text, offset) => `${startLine + offset}\t${text}`)
+				.join("\n")
+			return { path, startLine, endLine, text: body }
+		}
+	}
+	return undefined
+}
+
+/** Apply every hunk that still matches cleanly; skip the ones that drifted. */
+function applyApplicableHunks(original: string, hunks: EditHunk[]): string {
+	let current = original
+	for (const hunk of hunks) {
+		if (!hunk || hunk.oldText.length === 0) {
+			current += hunk?.newText ?? ""
+			continue
+		}
+		const first = current.indexOf(hunk.oldText)
+		if (first === -1) {
+			continue
+		}
+		if (current.indexOf(hunk.oldText, first + 1) !== -1) {
+			continue
+		}
+		current = current.slice(0, first) + hunk.newText + current.slice(first + hunk.oldText.length)
+	}
+	return current
+}
 
 export const TOOL_NAMES = [
 	"editor_read_file",
@@ -325,8 +506,23 @@ export async function callEditorTool(name: string, rawArgs: Record<string, unkno
 		case "editor_retrieve": {
 			const query = typeof rawArgs.query === "string" ? rawArgs.query : ""
 			const limit = typeof rawArgs.limit === "number" ? Math.min(Math.max(1, rawArgs.limit), 12) : 6
-			const hits = retrieveCode(ctx.root, query, limit)
-			return hits.map((hit) => `## ${hit.path}:${hit.startLine}-${hit.endLine} (score ${hit.score.toFixed(2)})\n${hit.text}`).join("\n\n---\n\n") || "no chunks matched"
+			const budgetTokens =
+				typeof rawArgs.budget_tokens === "number" ? Math.min(Math.max(256, rawArgs.budget_tokens), 16000) : undefined
+			// Rank cheaply first, then pack into a fixed budget. The ranker returns more
+			// candidates than we can afford so eviction decisions are visible in the report.
+			const hits = retrieveCode(ctx.root, query, Math.max(limit, 12))
+			const packed = packContext(
+				hits.map((hit) => ({
+					path: hit.path,
+					startLine: hit.startLine,
+					endLine: hit.endLine,
+					score: hit.score,
+					text: hit.text,
+					matchedTerms: hit.matchedTerms,
+				})),
+				{ budgetTokens, maxChunks: limit },
+			)
+			return formatPackedContext(packed)
 		}
 		case "editor_run_command":
 			return runCommand(ctx, rawArgs)
@@ -336,15 +532,44 @@ export async function callEditorTool(name: string, rawArgs: Record<string, unkno
 			// Called only AFTER TF's approval pause was answered allow — apply immediately.
 			const proposal = stageProposal(ctx, rawArgs)
 			const before = readFileSyncSafe(resolve(realpathSyncSafe(ctx.root), proposal.path))
-			const applied = applyHunks(before, proposal.hunks)
-			if (!applied.proposed) {
-				return JSON.stringify({ status: "rejected", path: proposal.path, applied: applied.applied, rejected: applied.rejected })
+			// Per-hunk decisions recorded by the review UI. When the user reviewed the
+			// diff and rejected some hunks, only the accepted ones are applied.
+			const accepted = takeHunkDecisions(proposalKey(proposal.path, proposal.hunks), proposal.hunks.length)
+			const hunksToApply = proposal.hunks.filter((_, index) => accepted[index])
+			const declinedHunks = accepted.filter((wasAccepted) => !wasAccepted).length
+			if (hunksToApply.length === 0) {
+				return JSON.stringify({
+					status: "rejected",
+					path: proposal.path,
+					applied: 0,
+					rejected: proposal.hunks.map((_, index) => ({ hunk: index, reason: "rejected by the user in review" })),
+				})
+			}
+			const applied = applyHunks(before, hunksToApply)
+			// A single stale hunk must not discard the hunks the user approved: apply
+			// every accepted hunk that still matches and report the ones that did not.
+			const proposed = applied.proposed ?? applyApplicableHunks(before, hunksToApply)
+			if (applied.applied === 0 || proposed === before) {
+				return JSON.stringify({
+					status: "rejected",
+					path: proposal.path,
+					applied: 0,
+					rejected: applied.rejected,
+				})
 			}
 			// Snapshot for undo before writing.
-			undoSnapshots.set(proposal.id, { path: proposal.path, before, after: applied.proposed })
+			undoSnapshots.set(proposal.id, { path: proposal.path, before, after: proposed })
 			const { writeFile } = await import("node:fs/promises")
-			await writeFile(resolve(realpathSyncSafe(ctx.root), proposal.path), applied.proposed, "utf8")
-			return JSON.stringify({ status: "applied", path: proposal.path, proposalId: proposal.id, hunks: applied.applied, bytes: applied.proposed.length })
+			await writeFile(resolve(realpathSyncSafe(ctx.root), proposal.path), proposed, "utf8")
+			return JSON.stringify({
+				status: "applied",
+				path: proposal.path,
+				proposalId: proposal.id,
+				hunks: applied.applied,
+				declinedHunks,
+				rejected: applied.rejected,
+				bytes: proposed.length,
+			})
 		}
 		case "editor_diagnostics": {
 			const path = typeof rawArgs.path === "string" ? rawArgs.path : ""
@@ -353,7 +578,11 @@ export async function callEditorTool(name: string, rawArgs: Record<string, unkno
 			}
 			const abs = resolve(realpathSyncSafe(ctx.root), path)
 			const { execFile } = await import("node:child_process")
-			const pyFiles = abs.endsWith(".py") ? [abs] : walkForSearch(ctx.root).filter(f => f.endsWith(".py")).slice(0, 20)
+			const pyFiles = abs.endsWith(".py")
+				? [abs]
+				: walkForSearch(ctx.root)
+						.filter((f) => f.endsWith(".py"))
+						.slice(0, 20)
 			const errors: string[] = []
 			for (const file of pyFiles) {
 				const rel = relative(realpathSyncSafe(ctx.root), file).split("\\").join("/")
@@ -367,7 +596,9 @@ export async function callEditorTool(name: string, rawArgs: Record<string, unkno
 					errors.push(`${rel}: ${err}`)
 				}
 			}
-			return errors.length === 0 ? "diagnostics: no Python syntax errors" : `diagnostics: ${errors.length} file(s) with syntax errors:\n${errors.join("\n")}`
+			return errors.length === 0
+				? "diagnostics: no Python syntax errors"
+				: `diagnostics: ${errors.length} file(s) with syntax errors:\n${errors.join("\n")}`
 		}
 		default:
 			throw new Error(`unknown tool: ${name}`)

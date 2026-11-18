@@ -32,11 +32,7 @@ export interface EditProposal {
 class EditRegistry {
 	private proposals = new Map<string, EditProposal>()
 
-	stage(
-		proposalId: string,
-		summary: string,
-		hunks: Array<Omit<StagedHunk, "proposalId" | "index">>,
-	): EditProposal {
+	stage(proposalId: string, summary: string, hunks: Array<Omit<StagedHunk, "proposalId" | "index">>): EditProposal {
 		const staged = hunks.map((h, index) => ({ ...h, proposalId, index }))
 		const proposal: EditProposal = {
 			id: proposalId,

@@ -13,12 +13,12 @@
 
 import { randomBytes } from "node:crypto"
 import { createServer, type Server } from "node:http"
-import { z } from "zod"
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js"
+import { Logger } from "@shared/services/Logger"
+import { z } from "zod"
 import type { WorkspaceContext } from "./tools"
 import { callEditorTool } from "./tools"
-import { Logger } from "@shared/services/Logger"
 
 export interface ForgeMcpServerOptions {
 	port?: number
@@ -72,7 +72,9 @@ export class ForgeMcpServer {
 					},
 					async (args) => {
 						try {
-							const result = await callEditorTool(toolName, (args ?? {}) as Record<string, unknown>, { root: this.ctx?.root ?? workspaceRoot })
+							const result = await callEditorTool(toolName, (args ?? {}) as Record<string, unknown>, {
+								root: this.ctx?.root ?? workspaceRoot,
+							})
 							return { content: [{ type: "text" as const, text: result }] }
 						} catch (error) {
 							const message = error instanceof Error ? error.message : String(error)
@@ -120,10 +122,7 @@ export class ForgeMcpServer {
 		})
 	}
 
-	private buildSchemas(): Record<
-		string,
-		{ description: string; shape: z.ZodRawShape | Record<string, never> }
-	> {
+	private buildSchemas(): Record<string, { description: string; shape: z.ZodRawShape | Record<string, never> }> {
 		const str = () => z.string()
 		return {
 			editor_read_file: {
@@ -139,11 +138,13 @@ export class ForgeMcpServer {
 				shape: {},
 			},
 			editor_retrieve: {
-				description: "Retrieve the most relevant code chunks for a natural-language query (BM25). Use this before editing.",
+				description:
+					"Retrieve the most relevant code chunks for a natural-language query (BM25). Use this before editing.",
 				shape: { query: str(), limit: z.number().optional() },
 			},
 			editor_run_command: {
-				description: "Run a shell command in the workspace root. Destructive/network commands (rm -rf, git push, sudo, curl) are refused. 60s timeout.",
+				description:
+					"Run a shell command in the workspace root. Destructive/network commands (rm -rf, git push, sudo, curl) are refused. 60s timeout.",
 				shape: { command: str() },
 			},
 			editor_propose_edit: {
@@ -160,7 +161,8 @@ export class ForgeMcpServer {
 				shape: { path: str().optional() },
 			},
 			editor_undo_last_edit: {
-				description: "Restore the exact pre-edit content of the most recent applied proposal (or a given proposalId). Approval still required. Later proposals on the same file are discarded too.",
+				description:
+					"Restore the exact pre-edit content of the most recent applied proposal (or a given proposalId). Approval still required. Later proposals on the same file are discarded too.",
 				shape: { proposalId: str().optional() },
 			},
 		}

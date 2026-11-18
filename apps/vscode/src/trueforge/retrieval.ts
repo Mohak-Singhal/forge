@@ -6,6 +6,7 @@
 
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import { join, relative, resolve, sep } from "node:path"
+import { estimateTokens } from "./context-budget"
 
 export interface RetrievedChunk {
 	path: string
@@ -14,6 +15,8 @@ export interface RetrievedChunk {
 	score: number
 	text: string
 	reason: string
+	/** Query terms this chunk actually contains, strongest first — used to explain the pick. */
+	matchedTerms: string[]
 }
 
 const TEXT_EXTENSIONS = new Set([
@@ -81,6 +84,7 @@ interface ScoredChunk {
 	endLine: number
 	score: number
 	text: string
+	matchedTerms: Array<{ term: string; hits: number; weight: number }>
 }
 
 function walk(root: string, maxFiles: number): string[] {
@@ -197,6 +201,7 @@ export function retrieveCode(root: string, query: string, limit = 8): RetrievedC
 			const chunkText = lines.slice(start, end).join("\n")
 			const chunkLower = chunkText.toLowerCase()
 			let score = 0
+			const matched: Array<{ term: string; hits: number; weight: number }> = []
 			for (const [token, freq] of tf) {
 				const idf = Math.log((N + 1) / ((df.get(token) ?? 0) + 1)) + 1
 				const k1 = 1.2
@@ -208,11 +213,20 @@ export function retrieveCode(root: string, query: string, limit = 8): RetrievedC
 					score += 0.2 * Math.log(1 + freq) * idf
 					continue
 				}
-				const scoreTf = (occurrenceCount * (k1 + 1)) / (occurrenceCount + k1 * (1 - b + (b * lines.length) / Math.max(1, tokens.length)))
-				score += scoreTf * idf
+				const scoreTf =
+					(occurrenceCount * (k1 + 1)) /
+					(occurrenceCount + k1 * (1 - b + (b * lines.length) / Math.max(1, tokens.length)))
+				const contribution = scoreTf * idf
+				score += contribution
+				matched.push({ term: token, hits: occurrenceCount, weight: contribution })
 			}
 			// Filename boost when query mentions the file stem (common for symbols).
-			const stem = rel.split("/").pop()?.replace(/\.[^.]+$/, "").toLowerCase() ?? ""
+			const stem =
+				rel
+					.split("/")
+					.pop()
+					?.replace(/\.[^.]+$/, "")
+					.toLowerCase() ?? ""
 			if (stem.length >= 3 && [...querySet].some((q) => stem.includes(q) || q.includes(stem))) {
 				score *= 1.6
 			}
@@ -221,7 +235,15 @@ export function retrieveCode(root: string, query: string, limit = 8): RetrievedC
 				score *= 1.4
 			}
 			if (score > 0.5) {
-				chunks.push({ path: rel, startLine: start + 1, endLine: end, score, text: chunkText.slice(0, 4000) })
+				matched.sort((a, b) => b.weight - a.weight)
+				chunks.push({
+					path: rel,
+					startLine: start + 1,
+					endLine: end,
+					score,
+					text: chunkText.slice(0, 4000),
+					matchedTerms: matched,
+				})
 			}
 		}
 	}
@@ -229,8 +251,18 @@ export function retrieveCode(root: string, query: string, limit = 8): RetrievedC
 	chunks.sort((a, b) => b.score - a.score)
 	const top = chunks.slice(0, Math.max(1, limit))
 	return top.map((chunk) => ({
-		...chunk,
-		reason: `BM25 score ${chunk.score.toFixed(2)} for query terms`,
+		path: chunk.path,
+		startLine: chunk.startLine,
+		endLine: chunk.endLine,
+		score: chunk.score,
+		text: chunk.text,
+		matchedTerms: chunk.matchedTerms.map((m) => m.term),
+		reason: `BM25 ${chunk.score.toFixed(2)}; terms: ${
+			chunk.matchedTerms
+				.slice(0, 4)
+				.map((m) => m.term)
+				.join(", ") || "file-level only"
+		}`,
 	}))
 }
 
@@ -248,19 +280,70 @@ function countOccurrences(text: string, token: string): number {
 }
 
 /**
- * Compact repository map (like Aider's): directories + file stems + def/class lines,
- * capped to a token budget by callers.
+ * Compact repository map (like Aider's): files with their top-level definitions,
+ * packed into a token budget. The map's job is orientation — enough to know which
+ * file owns which symbol without spending context on bodies.
  */
-export function buildRepoMap(root: string, maxEntries = 220): string {
+export function buildRepoMap(root: string, maxEntries = 220, budgetTokens = 1500): string {
 	const absoluteRoot = resolve(root)
-	const files = walk(absoluteRoot, MAX_FILES)
-	const lines: string[] = []
+	const files = walk(absoluteRoot, MAX_FILES).sort()
+	const perFile: Array<{ rel: string; symbols: string[] }> = []
 	for (const file of files.slice(0, maxEntries * 3)) {
 		const rel = relative(absoluteRoot, file).split(sep).join("/")
-		lines.push(rel)
-		if (lines.length >= maxEntries) {
+		perFile.push({ rel, symbols: topLevelSymbols(file) })
+		if (perFile.length >= maxEntries) {
 			break
 		}
 	}
-	return lines.sort().join("\n")
+
+	// Files with symbols first (they carry more information per line), then the rest.
+	const line = (entry: { rel: string; symbols: string[] }): string =>
+		entry.symbols.length > 0 ? `${entry.rel}: ${entry.symbols.join(", ")}` : entry.rel
+
+	const out: string[] = []
+	let used = 0
+	let omitted = 0
+	for (const entry of [...perFile].sort((a, b) => b.symbols.length - a.symbols.length)) {
+		const text = line(entry)
+		const cost = estimateTokens(text) + 1
+		if (used + cost > budgetTokens) {
+			omitted += 1
+			continue
+		}
+		used += cost
+		out.push(text)
+	}
+	out.sort()
+	const header = `repository map: ${out.length} file(s), ~${used}/${budgetTokens} tokens${omitted > 0 ? `, ${omitted} file(s) omitted to fit the budget` : ""}`
+	return `${header}\n${out.join("\n")}`
+}
+
+/** Top-level `def`/`class` (Python) or `export`ed names, best-effort, no parsing. */
+function topLevelSymbols(file: string): string[] {
+	const ext = file.slice(file.lastIndexOf(".")).toLowerCase()
+	if (![".py", ".js", ".ts", ".tsx", ".jsx", ".rs", ".go"].includes(ext)) {
+		return []
+	}
+	let content = ""
+	try {
+		content = readFileSync(file, "utf8")
+	} catch {
+		return []
+	}
+	const symbols: string[] = []
+	for (const raw of content.split("\n")) {
+		const py = /^(?:async\s+)?(?:def|class)\s+([A-Za-z_][A-Za-z0-9_]*)/.exec(raw)
+		if (py) {
+			symbols.push(`${raw.startsWith("class") ? "class" : "def"} ${py[1]}`)
+			continue
+		}
+		const js = /^(?:export\s+)?(?:async\s+)?(?:function|class|const|interface|type)\s+([A-Za-z_$][A-Za-z0-9_$]*)/.exec(raw)
+		if (js) {
+			symbols.push(js[1])
+		}
+		if (symbols.length >= 12) {
+			break
+		}
+	}
+	return symbols
 }

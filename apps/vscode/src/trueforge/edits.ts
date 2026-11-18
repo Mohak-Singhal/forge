@@ -20,7 +20,7 @@ export interface EditHunk {
 export interface ApplyResult {
 	ok: boolean
 	applied: number
-	rejected: Array<{ hunk: number, reason: string }>
+	rejected: Array<{ hunk: number; reason: string }>
 	/** Full proposed content if every hunk applied cleanly, else undefined. */
 	proposed?: string
 	staleBase?: boolean
@@ -34,7 +34,7 @@ export function sha256(text: string): string {
 export function applyHunks(original: string, hunks: EditHunk[]): ApplyResult {
 	let current = original
 	let applied = 0
-	const rejected: Array<{ hunk: number, reason: string }> = []
+	const rejected: Array<{ hunk: number; reason: string }> = []
 	for (let index = 0; index < hunks.length; index++) {
 		const hunk = hunks[index]
 		if (!hunk || typeof hunk.oldText !== "string" || typeof hunk.newText !== "string") {

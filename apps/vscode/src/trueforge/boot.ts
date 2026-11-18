@@ -10,9 +10,9 @@
 
 import { randomBytes } from "node:crypto"
 import * as vscode from "vscode"
-import { forgeMcpServer } from "./mcp/server"
-import { TrueForgeClient } from "./client"
 import { Logger } from "@/shared/services/Logger"
+import { TrueForgeClient } from "./client"
+import { forgeMcpServer } from "./mcp/server"
 
 export interface ForgeBootOptions {
 	workspaceRoot: string | undefined
@@ -25,7 +25,7 @@ export async function bootForge(context: vscode.ExtensionContext, options: Forge
 	}
 	// Stable per-install token (persisted) so the TF connector and the loopback server
 	// always agree, even across reloads — reloading the window re-upserts TF with it.
-	let token = process.env.FORGE_MCP_TOKEN ?? (context.globalState.get<string>("forge.mcpToken"))
+	let token = process.env.FORGE_MCP_TOKEN ?? context.globalState.get<string>("forge.mcpToken")
 	if (!token) {
 		token = randomBytes(16).toString("hex")
 		// biome-ignore lint/plugin: per-install persisted secret; globalState is the VS Code API for this (cf. state-migrations.ts) while CacheService holds session state
@@ -49,11 +49,12 @@ export async function bootForge(context: vscode.ExtensionContext, options: Forge
 				name: "vscode-editor-tools",
 				type: "remote",
 				url: "http://127.0.0.1:8791/mcp",
-				description: "Forge editor tools: read_file, search, retrieve, repo_map, run_command, propose_edit, diagnostics, undo_last_edit",
+				description:
+					"Forge editor tools: read_file, search, retrieve, repo_map, run_command, propose_edit, diagnostics, undo_last_edit",
 				auth: { type: "header", headers: { "x-forge-token": token } },
 			},
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		// biome-ignore lint/suspicious/noExplicitAny: TrueForge SDK surfaces untyped agent/session shapes
+			// biome-ignore lint/suspicious/noExplicitAny: TrueForge SDK surfaces untyped agent/session shapes
 		} as any)
 		Logger.log("[Forge] vscode-editor-tools connector upserted in TrueForge")
 	} catch (error) {

@@ -43,6 +43,7 @@ import { clearSdkRemoteConfig, refreshSdkRemoteConfig } from "@/core/storage/rem
 import { StateManager } from "@/core/storage/StateManager"
 import { WorkspaceRootManager } from "@/core/workspace/WorkspaceRootManager"
 import { HostProvider } from "@/hosts/host-provider"
+import { reviewForgeProposal } from "@/hosts/vscode/ForgeHunkReview"
 import { VscodeTerminalManager } from "@/hosts/vscode/terminal/VscodeTerminalManager"
 import { ExtensionRegistryInfo } from "@/registry"
 import { OcaAuthService } from "@/services/auth/oca/OcaAuthService"
@@ -406,7 +407,16 @@ export class Controller {
 			getMinter: () => this.messageTranslatorState.getMinter(),
 			setTurnPhase: (phase, anchorTs) => this.turnStateTracker.set(phase, anchorTs),
 			// Open the diff editor preview before the approval buttons render.
-			onToolApprovalAsk: (request) => this.diffEdits.openForApproval(request.toolCallId, request.toolName, request.input),
+			// Forge's MCP `editor_propose_edit` needs its own review (the diff tab plus
+			// per-hunk keep/skip); Cline's native `editor`/`apply_patch` keep the existing
+			// coordinator path. Forge review returning undefined falls through.
+			onToolApprovalAsk: async (request) => {
+				const reviewed = await reviewForgeProposal(request.toolName, request.input, await this.getWorkspaceRoot())
+				if (reviewed) {
+					return
+				}
+				await this.diffEdits.openForApproval(request.toolCallId, request.toolName, request.input)
+			},
 			recordApprovedToolMessage: (toolCallId, messageTs) =>
 				this.messageTranslatorState.recordApprovedToolMessageTs(toolCallId, messageTs),
 			recordDeniedToolApproval: (toolCallId, toolName, reason) => {

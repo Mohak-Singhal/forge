@@ -41,6 +41,7 @@ import {
 import { workspaceResolver } from "./core/workspace"
 import { findMatchingNotebookCell, getContextForCommand, showWebview } from "./hosts/vscode/commandUtils"
 import { abortCommitGeneration, generateCommitMsg } from "./hosts/vscode/commit-message-generator"
+import { runInlineEdit, undoLastInlineEdit } from "./hosts/vscode/ForgeInlineEdit"
 import { registerClineOutputChannel } from "./hosts/vscode/hostbridge/env/debugLog"
 import {
 	disposeVscodeCommentReviewController,
@@ -51,12 +52,12 @@ import { EDIT_PREVIEW_URI_SCHEME, editPreviewContentProvider, VscodeEditPreview 
 import { VscodeWebviewProvider } from "./hosts/vscode/VscodeWebviewProvider"
 import { exportVSCodeStorageToSharedFiles } from "./hosts/vscode/vscode-to-file-migration"
 import { ExtensionRegistryInfo } from "./registry"
-import { bootForge } from "./trueforge/boot"
 import { AuthService, LogoutReason } from "./sdk/auth-service"
 import { telemetryService } from "./services/telemetry"
 import type { RolloutBundleActivation } from "./services/telemetry/rollout-metadata"
 import { LG_TASK_URI_PATH, SharedUriHandler, TASK_URI_PATH } from "./services/uri/SharedUriHandler"
 import { ShowMessageType } from "./shared/proto/host/window"
+import { bootForge } from "./trueforge/boot"
 import { fileExistsAtPath } from "./utils/fs"
 
 export async function reportRolloutActivation(input: RolloutBundleActivation): Promise<void> {
@@ -350,6 +351,19 @@ export async function activate(context: vscode.ExtensionContext) {
 				return
 			}
 			await improveWithCline(context.controller, context.commandContext)
+		}),
+	)
+
+	// Forge inline edit: select code, press the keybinding, describe the change.
+	// The diff is reviewed per hunk and nothing is written until the user accepts.
+	context.subscriptions.push(
+		vscode.commands.registerCommand("forge.inlineEdit", async () => {
+			await runInlineEdit(context)
+		}),
+	)
+	context.subscriptions.push(
+		vscode.commands.registerCommand("forge.undoLastEdit", async () => {
+			await undoLastInlineEdit()
 		}),
 	)
 

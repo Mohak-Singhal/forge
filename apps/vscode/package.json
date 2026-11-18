@@ -228,6 +228,16 @@
 				"command": "cline.openWalkthrough",
 				"title": "Open Walkthrough",
 				"category": "Cline"
+			},
+			{
+				"command": "forge.inlineEdit",
+				"title": "Inline Edit (Forge)",
+				"category": "Forge"
+			},
+			{
+				"command": "forge.undoLastEdit",
+				"title": "Undo Last Edit (Forge)",
+				"category": "Forge"
 			}
 		],
 		"keybindings": [
@@ -250,6 +260,22 @@
 				"win": "ctrl+'",
 				"linux": "ctrl+'",
 				"when": "!editorHasSelection"
+			},
+			{
+				"command": "forge.inlineEdit",
+				"key": "cmd+alt+k",
+				"mac": "cmd+alt+k",
+				"win": "ctrl+alt+k",
+				"linux": "ctrl+alt+k",
+				"when": "editorHasSelection && editorTextFocus"
+			},
+			{
+				"command": "forge.undoLastEdit",
+				"key": "cmd+alt+z",
+				"mac": "cmd+alt+z",
+				"win": "ctrl+alt+z",
+				"linux": "ctrl+alt+z",
+				"when": "editorTextFocus"
 			}
 		],
 		"menus": {
@@ -285,6 +311,11 @@
 					"command": "cline.addToChat",
 					"group": "navigation",
 					"when": "editorHasSelection"
+				},
+				{
+					"command": "forge.inlineEdit",
+					"when": "editorHasSelection",
+					"group": "1_modification@1"
 				}
 			],
 			"terminal/context": [
@@ -332,6 +363,10 @@
 				{
 					"command": "cline.abortGitCommitMessage",
 					"when": "config.git.enabled && cline.isGeneratingCommit"
+				},
+				{
+					"command": "forge.inlineEdit",
+					"when": "editorHasSelection"
 				}
 			]
 		},

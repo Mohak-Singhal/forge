@@ -9,7 +9,7 @@ import { TrueForge } from "@truefoundry/trueforge-sdk"
 /** The agent definition loaded from .trueforge/agents/forge-editor.json (or the built-in default). */
 export interface ForgeAgentSpec {
 	instructions: string
-	model: { name: string }
+	model: { name: string; fallbacks?: string[] }
 	mcp_servers?: Array<Record<string, unknown>>
 	config?: Record<string, unknown>
 }
@@ -29,7 +29,7 @@ export class TrueForgeClient {
 		const result = await this.sdk.sessions.create({
 			agent: { spec },
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		// biome-ignore lint/suspicious/noExplicitAny: TrueForge SDK surfaces untyped agent/session shapes
+			// biome-ignore lint/suspicious/noExplicitAny: TrueForge SDK surfaces untyped agent/session shapes
 		} as any)
 		const id = (result as unknown as { data?: { id?: string } }).data?.id
 		if (!id) {
@@ -44,7 +44,7 @@ export class TrueForgeClient {
 		const stream = await this.sdk.sessions.createTurnStream(sessionId, {
 			input: [{ type: "user.message", content: prompt }],
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		// biome-ignore lint/suspicious/noExplicitAny: TrueForge SDK surfaces untyped agent/session shapes
+			// biome-ignore lint/suspicious/noExplicitAny: TrueForge SDK surfaces untyped agent/session shapes
 		} as any)
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		for await (const event of stream as AsyncIterable<unknown>) {
@@ -57,7 +57,7 @@ export class TrueForgeClient {
 		const stream = await this.sdk.sessions.createTurnStream(sessionId, {
 			input: [{ type: "user.message", content: prompt }],
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		// biome-ignore lint/suspicious/noExplicitAny: TrueForge SDK surfaces untyped agent/session shapes
+			// biome-ignore lint/suspicious/noExplicitAny: TrueForge SDK surfaces untyped agent/session shapes
 		} as any)
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		for await (const _event of stream as AsyncIterable<unknown>) {
@@ -67,6 +67,20 @@ export class TrueForgeClient {
 
 	async cancelTurn(sessionId: string): Promise<void> {
 		await this.sdk.sessions.cancel(sessionId)
+	}
+
+	/**
+	 * Re-point an inline session at a different model. Inline sessions accept an
+	 * agent-spec update; named sessions reject it, which is why Forge always creates
+	 * inline sessions from the committed agent definition.
+	 */
+	async switchModel(sessionId: string, spec: ForgeAgentSpec, modelName: string): Promise<void> {
+		const nextSpec: ForgeAgentSpec = { ...spec, model: { ...spec.model, name: modelName } }
+		await this.sdk.sessions.update(sessionId, {
+			agent: { spec: nextSpec },
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			// biome-ignore lint/suspicious/noExplicitAny: TrueForge SDK surfaces untyped agent/session shapes
+		} as any)
 	}
 
 	async sendToolApproval(
@@ -88,7 +102,7 @@ export class TrueForgeClient {
 				},
 			],
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		// biome-ignore lint/suspicious/noExplicitAny: TrueForge SDK surfaces untyped agent/session shapes
+			// biome-ignore lint/suspicious/noExplicitAny: TrueForge SDK surfaces untyped agent/session shapes
 		} as any)
 	}
 

@@ -35,12 +35,21 @@ import {
 	type StartSessionInput,
 	type StartSessionResult,
 } from "@cline/core"
-import type { AgentResult } from "@cline/shared"
+import type {
+	AgentContentEndEvent,
+	AgentContentStartEvent,
+	AgentDoneEvent,
+	AgentErrorEvent,
+	AgentEvent,
+	AgentIterationStartEvent,
+	AgentResult,
+	AgentUsageEvent as TFAgentUsageEvent,
+} from "@cline/shared"
 import { Logger } from "@shared/services/Logger"
-import type { AgentIterationStartEvent, AgentContentStartEvent, AgentContentEndEvent, AgentDoneEvent, AgentErrorEvent, AgentEvent } from "@cline/shared"
-import type { AgentUsageEvent as TFAgentUsageEvent } from "@cline/shared"
 import type { SdkInitialMessages, SdkSessionHost } from "../sdk/session-host"
-import { TrueForgeClient, type ForgeAgentSpec } from "./client"
+import { type ForgeAgentSpec, TrueForgeClient } from "./client"
+import { resolveMentionContext } from "./mcp/tools"
+import { attemptOrder, decideFallback, decideRetry, defaultSleep, exhaustedMessage, modelChainFromSpec } from "./model-fallback"
 
 function loadForgeAgentSpec(extensionPath: string): ForgeAgentSpec {
 	// Agent definition is committed by the fork: .trueforge/agents/forge-editor.json
@@ -82,6 +91,8 @@ export interface TrueForgeSessionHostOptions {
 		policy: { enabled: boolean; autoApprove: boolean }
 	}) => Promise<{ approved: boolean; reason?: string }>
 	askQuestion?: (question: string, options: string[], _context: unknown) => Promise<{ text: string }>
+	/** Test seam: replaces the backoff sleep so retry tests run instantly. */
+	sleep?: (ms: number) => Promise<void>
 }
 
 interface TurnState {
@@ -92,6 +103,10 @@ interface TurnState {
 	contentAccumulator: { id?: string; text: string; toolCalls: Map<string, { name: string; arguments: string; id: string }> }
 	usage: { inputTokens: number; outputTokens: number; cost: number }
 	finished: boolean
+	/** Terminal status of the current turn, as reported by `turn.done`. */
+	terminalStatus?: string
+	/** The harness's failure message for the current turn, if any. */
+	terminalMessage?: string
 }
 
 function nowIso(): string {
@@ -109,6 +124,8 @@ export class TrueForgeSessionHost implements SdkSessionHost {
 	private readonly client: TrueForgeClient
 	private readonly requestToolApproval?: TrueForgeSessionHostOptions["requestToolApproval"]
 	private readonly listeners = new Set<(event: CoreSessionEvent) => void>()
+	/** Backoff sleep; injectable so tests do not wait real time. */
+	private readonly sleep: (ms: number) => Promise<void>
 	/** sessionId (=TF session id) */
 	private readonly sessions = new Map<string, { turn?: TurnState; createdAt: string; cwd: string; prompt: string }>()
 
@@ -118,6 +135,7 @@ export class TrueForgeSessionHost implements SdkSessionHost {
 		this.extensionPath = options.extensionPath
 		this.client = new TrueForgeClient(this.url)
 		this.requestToolApproval = options.requestToolApproval
+		this.sleep = options.sleep ?? defaultSleep
 	}
 
 	static async create(options: TrueForgeSessionHostOptions): Promise<TrueForgeSessionHost> {
@@ -192,13 +210,105 @@ export class TrueForgeSessionHost implements SdkSessionHost {
 			type: "status",
 			payload: { sessionId, status: "running" },
 		} as unknown as CoreSessionEvent)
-		this.emit(stageEvent(sessionId, { type: "iteration_start", iteration: turn.iteration, agentId: sessionId, conversationId: sessionId } as AgentIterationStartEvent))
-		try {
-			for await (const event of this.client.streamTurn(sessionId, input.prompt)) {
-				this.handleTurnEvent(sessionId, event as Record<string, unknown>)
+		this.emit(
+			stageEvent(sessionId, {
+				type: "iteration_start",
+				iteration: turn.iteration,
+				agentId: sessionId,
+				conversationId: sessionId,
+			} as AgentIterationStartEvent),
+		)
+		// Model fallback: if the configured model is unreachable or rejects the key,
+		// retry the same prompt on the next model in the chain with no user action.
+		// Only when every model has failed do we surface an error to the user.
+		const chain = modelChainFromSpec(loadForgeAgentSpec(this.extensionPath).model)
+		const order = attemptOrder(chain)
+		let modelIndex = 0
+		let activeModel = order[0] ?? ""
+		let modelAttempts = 0
+		let lastError: unknown
+		// Explicit `@file` / `@symbol` mentions are resolved to real text before the
+		// model sees anything, and prepended un-evictable. Retrieval then fills the rest.
+		const mentionContext = resolveMentionContext({ root: state.cwd }, input.prompt)
+		if (mentionContext.contextText) {
+			Logger.log(
+				`[TrueForge] resolved mentions: files=${mentionContext.files.length} symbols=${mentionContext.symbols.length}`,
+			)
+		}
+		const promptWithMentions = mentionContext.contextText
+			? `${mentionContext.contextText}\n\n---\n\nUser request: ${mentionContext.promptText}`
+			: input.prompt
+
+		/**
+		 * One failure, handled in the order the brief asks for: retry the same model with
+		 * backoff while the error looks transient, then move to the next configured model,
+		 * then give up with a message naming everything that was tried.
+		 */
+		const handleFailure = async (error: unknown): Promise<"retried" | "failed_over" | "stop"> => {
+			lastError = error
+			const retry = decideRetry(activeModel, error, modelAttempts)
+			if (retry.shouldRetry) {
+				Logger.warn(`[TrueForge] ${retry.note}`)
+				this.emit(
+					stageEvent(sessionId, {
+						type: "content_start",
+						contentType: "text",
+						text: `\n\n[Forge] ${retry.note}\n\n`,
+						accumulated: turn.contentAccumulator.text,
+						agentId: sessionId,
+						conversationId: sessionId,
+					} as AgentContentStartEvent),
+				)
+				await this.sleep(retry.delayMs)
+				return "retried"
 			}
-		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error)
+			const decision = decideFallback(chain, activeModel, error, modelIndex + 1)
+			Logger.warn(`[TrueForge] ${decision.note}`)
+			if (decision.shouldFailover && decision.next) {
+				await this.failoverTo(sessionId, turn, decision.next, decision.note)
+				modelIndex = decision.nextIndex ?? modelIndex + 1
+				activeModel = decision.next
+				modelAttempts = 0
+				return "failed_over"
+			}
+			return "stop"
+		}
+
+		for (;;) {
+			modelAttempts += 1
+			turn.terminalStatus = undefined
+			turn.terminalMessage = undefined
+			try {
+				for await (const event of this.client.streamTurn(sessionId, promptWithMentions)) {
+					this.handleTurnEvent(sessionId, event as Record<string, unknown>)
+				}
+				// A turn can end in error without throwing: TrueForge reports model failures
+				// as `turn.done { status: "error" }` on the stream. Treat that like a stream
+				// error so retry, failover and the exhausted message all work for Task C.
+				if (turn.terminalStatus === "cancelled") {
+					// The user stopped this turn; retrying would defeat the cancellation.
+					lastError = undefined
+					break
+				}
+				if (turn.terminalStatus === "error" || turn.terminalStatus === "failed") {
+					const outcome = await handleFailure(new Error(turn.terminalMessage || "TrueForge turn failed"))
+					if (outcome === "stop") {
+						// The terminal error was already surfaced by the turn.done handler.
+						break
+					}
+					continue
+				}
+				lastError = undefined
+				break
+			} catch (error) {
+				const outcome = await handleFailure(error)
+				if (outcome === "stop") {
+					break
+				}
+			}
+		}
+		if (lastError !== undefined) {
+			const message = exhaustedMessage(chain, lastError)
 			Logger.error(`[TrueForge] turn stream failed: ${message}`)
 			this.emit(
 				stageEvent(sessionId, {
@@ -412,6 +522,12 @@ export class TrueForgeSessionHost implements SdkSessionHost {
 					const isError = stateKind === "failed" || stateKind === "error"
 					const reason = stateKind === "done" ? "stop" : stateKind === "cancelled" ? "aborted" : "error"
 					const failureMessage = done.state?.message?.trim()
+					// Record the terminal state so the turn driver can decide whether this is a
+					// model-availability failure worth failing over, or a task failure to report.
+					if (turn) {
+						turn.terminalStatus = stateKind
+						turn.terminalMessage = failureMessage
+					}
 					const accumulated = turn?.contentAccumulator.text ?? ""
 					// Surface the harness's own failure message when the model call dies
 					// before any text was produced — otherwise the chat renders nothing.
@@ -438,11 +554,42 @@ export class TrueForgeSessionHost implements SdkSessionHost {
 							conversationId: sessionId,
 						} as AgentDoneEvent),
 					)
-					this.emit({ type: "ended", payload: { sessionId, reason: reason === "error" ? "error" : "completed", ts: Date.now() } } as CoreSessionEvent)
+					this.emit({
+						type: "ended",
+						payload: { sessionId, reason: reason === "error" ? "error" : "completed", ts: Date.now() },
+					} as CoreSessionEvent)
 					if (turn) {
 						turn.finished = true
 					}
 				}
+				return
+			}
+			case "thread.context_compaction_started": {
+				// TrueForge is compacting the thread because it crossed the token
+				// threshold. Surfacing it matters: compaction is the reason a long Task B
+				// session keeps working after the repo stops fitting, and a judge needs to
+				// see the harness doing it rather than take it on faith.
+				const started = event as unknown as {
+					trigger?: { context_tokens?: number; threshold_tokens?: number }
+				}
+				const tokens = started.trigger?.context_tokens
+				const threshold = started.trigger?.threshold_tokens
+				const detail =
+					tokens !== undefined && threshold !== undefined
+						? `context reached ${tokens} tokens (threshold ${threshold})`
+						: "context threshold reached"
+				this.emitToolNote(
+					sessionId,
+					`[TrueForge] compacting thread context — ${detail}. Older turns are summarised so the task can continue.`,
+				)
+				return
+			}
+			case "thread.context_compaction_finished": {
+				const finished = event as unknown as { duration_ms?: number }
+				this.emitToolNote(
+					sessionId,
+					`[TrueForge] context compaction finished in ${finished.duration_ms ?? 0}ms; the thread continues inside the window.`,
+				)
 				return
 			}
 			case "error": {
@@ -465,6 +612,27 @@ export class TrueForgeSessionHost implements SdkSessionHost {
 				return
 			}
 		}
+	}
+
+	/**
+	 * Append a short harness note to the transcript as ordinary assistant text. Used
+	 * for TrueForge's own context-engineering events (compaction, failover, retries)
+	 * so the user sees what the harness did on their behalf instead of inferring it
+	 * from a changed window.
+	 */
+	private emitToolNote(sessionId: string, text: string): void {
+		const state = this.sessions.get(sessionId)
+		const accumulated = state?.turn?.contentAccumulator.text ?? ""
+		this.emit(
+			stageEvent(sessionId, {
+				type: "content_start",
+				contentType: "text",
+				text: `\n\n${text}\n\n`,
+				accumulated,
+				agentId: sessionId,
+				conversationId: sessionId,
+			} as AgentContentStartEvent),
+		)
 	}
 
 	private trackToolCall(sessionId: string, toolCall: Record<string, unknown>): void {
@@ -506,9 +674,13 @@ export class TrueForgeSessionHost implements SdkSessionHost {
 			}
 			if (!this.requestToolApproval) {
 				// No UI wired (headless/test): auto-approve read-only tools, reject writes.
-				const readOnly = /^(vscode-editor-tools__)?editor_(read_file|search|retrieve|repo_map|diagnostics)$/.test(String(toolName))
+				const readOnly = /^(vscode-editor-tools__)?editor_(read_file|search|retrieve|repo_map|diagnostics)$/.test(
+					String(toolName),
+				)
 				const decision = readOnly ? "allow" : "deny"
-				await this.client.sendToolApproval(sessionId, turnId, approval.threadId, call.id, { status: decision as "allow" | "deny" })
+				await this.client.sendToolApproval(sessionId, turnId, approval.threadId, call.id, {
+					status: decision as "allow" | "deny",
+				})
 				continue
 			}
 			const decision = await this.requestToolApproval({
@@ -525,6 +697,35 @@ export class TrueForgeSessionHost implements SdkSessionHost {
 				reason: decision.reason,
 			})
 		}
+	}
+
+	/**
+	 * Hand the turn to the next configured model: re-point the inline session, tell the
+	 * user in the transcript, and clear the accumulator so the retry does not duplicate
+	 * text. Failing to switch is logged but not fatal — the retry still runs.
+	 */
+	private async failoverTo(sessionId: string, turn: TurnState, nextModel: string, note: string): Promise<void> {
+		this.emit(
+			stageEvent(sessionId, {
+				type: "content_start",
+				contentType: "text",
+				text: `\n\n[Forge] ${note}\n\n`,
+				accumulated: turn.contentAccumulator.text,
+				agentId: sessionId,
+				conversationId: sessionId,
+			} as AgentContentStartEvent),
+		)
+		try {
+			await this.client.switchModel(sessionId, loadForgeAgentSpec(this.extensionPath), nextModel)
+			Logger.log(`[TrueForge] session ${sessionId} switched to ${nextModel}`)
+		} catch (switchError) {
+			Logger.warn(
+				`[TrueForge] could not switch session to ${nextModel}: ${switchError instanceof Error ? switchError.message : String(switchError)}`,
+			)
+		}
+		turn.contentAccumulator = { text: "", toolCalls: new Map() }
+		turn.terminalStatus = undefined
+		turn.terminalMessage = undefined
 	}
 
 	async abort(sessionId: string, _reason?: unknown): Promise<void> {
@@ -552,7 +753,10 @@ export class TrueForgeSessionHost implements SdkSessionHost {
 		return this.toRecord(sessionId, state)
 	}
 
-	async list(limit = 50, _options?: { cwd?: string; includeManifestFallback?: boolean; hydrate?: boolean; includeSubagents?: boolean }): Promise<SessionHistoryRecord[]> {
+	async list(
+		limit = 50,
+		_options?: { cwd?: string; includeManifestFallback?: boolean; hydrate?: boolean; includeSubagents?: boolean },
+	): Promise<SessionHistoryRecord[]> {
 		const records: SessionHistoryRecord[] = []
 		for (const [sessionId, state] of [...this.sessions.entries()].slice(-limit)) {
 			records.push(this.toRecord(sessionId, state))
@@ -604,9 +808,7 @@ export class TrueForgeSessionHost implements SdkSessionHost {
 		if (!text) {
 			return [] as unknown as SdkInitialMessages
 		}
-		return [
-			{ role: "assistant", content: text } as unknown as SdkInitialMessages[number],
-		] as unknown as SdkInitialMessages
+		return [{ role: "assistant", content: text } as unknown as SdkInitialMessages[number]] as unknown as SdkInitialMessages
 	}
 
 	async updateSessionCompactionState(_sessionId: string, _state: SessionCompactionState): Promise<{ updated: boolean }> {
@@ -622,7 +824,10 @@ export class TrueForgeSessionHost implements SdkSessionHost {
 		} as unknown as CompareCheckpointResult
 	}
 
-	async update(sessionId: string, updates: { prompt?: string | null; metadata?: Record<string, unknown> | null; title?: string | null }): Promise<{ updated: boolean }> {
+	async update(
+		sessionId: string,
+		updates: { prompt?: string | null; metadata?: Record<string, unknown> | null; title?: string | null },
+	): Promise<{ updated: boolean }> {
 		const state = this.sessions.get(sessionId)
 		if (!state) return { updated: false }
 		if (typeof updates.prompt === "string") state.prompt = updates.prompt
@@ -654,7 +859,9 @@ export class TrueForgeSessionHost implements SdkSessionHost {
 	}
 
 	updateSessionModel?(sessionId: string, modelId: string): Promise<void> {
-		Logger.log(`[TrueForge] updateSessionModel ignored (model pinned in TrueForge settings): session=${sessionId} model=${modelId}`)
+		Logger.log(
+			`[TrueForge] updateSessionModel ignored (model pinned in TrueForge settings): session=${sessionId} model=${modelId}`,
+		)
 		return Promise.resolve()
 	}
 
