@@ -11,8 +11,8 @@
 
 import { exec } from "node:child_process"
 import { constants as fsConstants } from "node:fs"
-import { access, readFile, realpath } from "node:fs/promises"
-import { join, relative, resolve } from "node:path"
+import { access, readFile } from "node:fs/promises"
+import { relative, resolve } from "node:path"
 import { applyHunks, type EditHunk, sha256 } from "../edits"
 import { buildRepoMap, retrieveCode } from "../retrieval"
 
@@ -38,7 +38,7 @@ export function stageProposal(ctx: WorkspaceContext, input: { path?: unknown; ed
 	if (!path) {
 		throw new Error("editor_propose_edit requires a non-empty `path`")
 	}
-	const abs = resolve(ctx.root, path)
+	const abs = resolve(realpathSyncSafe(ctx.root), path)
 	const rel = relative(realpathSyncSafe(ctx.root), abs)
 	if (rel.startsWith("..")) {
 		throw new Error(`editor_propose_edit: path escapes workspace: ${path}`)
@@ -78,7 +78,7 @@ export async function applyProposal(ctx: WorkspaceContext, id: string): Promise<
 	if (!proposal) {
 		throw new Error(`editor_apply_staged: unknown proposal id ${id}`)
 	}
-	const abs = resolve(ctx.root, proposal.path)
+	const abs = resolve(realpathSyncSafe(ctx.root), proposal.path)
 	const rel = relative(realpathSyncSafe(ctx.root), abs)
 	if (rel.startsWith("..")) {
 		throw new Error("editor_apply_staged: path escapes workspace")
@@ -128,7 +128,7 @@ async function readToolFile(ctx: WorkspaceContext, args: Record<string, unknown>
 	if (!path.trim()) {
 		throw new Error("editor_read_file: `path` is required")
 	}
-	const abs = resolve(ctx.root, path)
+	const abs = resolve(realpathSyncSafe(ctx.root), path)
 	const rel = relative(realpathSyncSafe(ctx.root), abs)
 	if (rel.startsWith("..")) {
 		throw new Error("editor_read_file: path escapes workspace")
@@ -174,7 +174,7 @@ async function searchText(ctx: WorkspaceContext, args: Record<string, unknown>):
 			continue
 		}
 		const lines = content.split("\n")
-		const rel = relative(ctx.root, file).split("\\").join("/")
+		const rel = relative(realpathSyncSafe(ctx.root), file).split("\\").join("/")
 		const scope = typeof input.path === "string" ? input.path.trim() : ""
 		if (scope && !rel.startsWith(scope.replace(/^\.\//, ""))) {
 			continue
@@ -287,7 +287,7 @@ export async function callEditorTool(name: string, rawArgs: Record<string, unkno
 		case "editor_propose_edit": {
 			// Called only AFTER TF's approval pause was answered allow — apply immediately.
 			const proposal = stageProposal(ctx, rawArgs)
-			const before = readFileSyncSafe(resolve(ctx.root, proposal.path))
+			const before = readFileSyncSafe(resolve(realpathSyncSafe(ctx.root), proposal.path))
 			const applied = applyHunks(before, proposal.hunks)
 			if (!applied.proposed) {
 				return JSON.stringify({ status: "rejected", path: proposal.path, applied: applied.applied, rejected: applied.rejected })
@@ -295,7 +295,7 @@ export async function callEditorTool(name: string, rawArgs: Record<string, unkno
 			// Snapshot for undo before writing.
 			undoSnapshots.set(proposal.id, { path: proposal.path, before, after: applied.proposed })
 			const { writeFile } = await import("node:fs/promises")
-			await writeFile(resolve(ctx.root, proposal.path), applied.proposed, "utf8")
+			await writeFile(resolve(realpathSyncSafe(ctx.root), proposal.path), applied.proposed, "utf8")
 			return JSON.stringify({ status: "applied", path: proposal.path, proposalId: proposal.id, hunks: applied.applied, bytes: applied.proposed.length })
 		}
 		case "editor_diagnostics": {
@@ -303,12 +303,12 @@ export async function callEditorTool(name: string, rawArgs: Record<string, unkno
 			if (!path) {
 				throw new Error("editor_diagnostics: `path` is required")
 			}
-			const abs = resolve(ctx.root, path)
+			const abs = resolve(realpathSyncSafe(ctx.root), path)
 			const { execFile } = await import("node:child_process")
 			const pyFiles = abs.endsWith(".py") ? [abs] : walkForSearch(ctx.root, 10000).filter(f => f.endsWith(".py")).slice(0, 20)
 			const errors: string[] = []
 			for (const file of pyFiles) {
-				const rel = relative(ctx.root, file).split("\\").join("/")
+				const rel = relative(realpathSyncSafe(ctx.root), file).split("\\").join("/")
 				const err = await new Promise<string>((resolveP) => {
 					execFile("python3", ["-m", "py_compile", file], (e) => {
 						if (!e) return resolveP("")

@@ -35,9 +35,9 @@ import {
 	type StartSessionInput,
 	type StartSessionResult,
 } from "@cline/core"
-import type { AgentResult, AgentUsageEvent } from "@cline/shared"
+import type { AgentResult } from "@cline/shared"
 import { Logger } from "@shared/services/Logger"
-import type { AgentIterationStartEvent, AgentContentStartEvent, AgentContentEndEvent, AgentDoneEvent, AgentErrorEvent, AgentEvent, AgentFinishReason } from "@cline/shared"
+import type { AgentIterationStartEvent, AgentContentStartEvent, AgentContentEndEvent, AgentDoneEvent, AgentErrorEvent, AgentEvent } from "@cline/shared"
 import type { AgentUsageEvent as TFAgentUsageEvent } from "@cline/shared"
 import type { SdkInitialMessages, SdkSessionHost } from "../sdk/session-host"
 import { TrueForgeClient, type ForgeAgentSpec } from "./client"
