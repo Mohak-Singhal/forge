@@ -27,7 +27,9 @@ Flask demo repository), VS Code ≥ 1.96, git.
 git clone https://github.com/<owner>/<repo>.git && cd <repo>
 bun install
 bun run build:sdk            # SDK packages resolve via compiled dist/
-bun run package              # builds apps/vscode/dist/extension.js
+cd apps/vscode
+bun run package              # check-types + lint + production build; writes dist/extension.js
+cd ..
 ```
 
 ### 1. Start TrueForge (local mode, never deployed)
@@ -63,7 +65,7 @@ On activation the extension:
 
 1. starts the loopback MCP server on `127.0.0.1:8791` exposing the editor capabilities
    (`editor_read_file`, `editor_search`, `editor_repo_map`, `editor_retrieve`,
-   `editor_diagnostics`, `editor_propose_edit`, `editor_run_command`);
+   `editor_diagnostics`, `editor_propose_edit`, `editor_run_command`, `editor_undo_last_edit`);
 2. upserts the `vscode-editor-tools` connector into TrueForge at
    `http://127.0.0.1:8791/mcp`;
 3. loads the agent definition from [`.trueforge/agents/forge-editor.json`](./.trueforge/agents/forge-editor.json)

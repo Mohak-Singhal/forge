@@ -49,7 +49,7 @@ export async function bootForge(context: vscode.ExtensionContext, options: Forge
 				name: "vscode-editor-tools",
 				type: "remote",
 				url: "http://127.0.0.1:8791/mcp",
-				description: "Forge editor tools: read_file, search, retrieve, repo_map, run_command, propose_edit, diagnostics",
+				description: "Forge editor tools: read_file, search, retrieve, repo_map, run_command, propose_edit, diagnostics, undo_last_edit",
 				auth: { type: "header", headers: { "x-forge-token": token } },
 			},
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any

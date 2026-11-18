@@ -231,6 +231,30 @@ function walkForSearch(root: string, maxFiles = 5000): string[] {
 const COMMAND_TIMEOUT_MS = 60_000
 const MAX_OUTPUT_BYTES = 8 * 1024
 
+async function undoLastEdit(ctx: WorkspaceContext, args: Record<string, unknown>): Promise<string> {
+	const proposalId = typeof args.proposalId === "string" ? args.proposalId : undefined
+	let id = proposalId
+	if (!id) {
+		id = [...undoSnapshots.keys()].at(-1)
+	}
+	if (!id) {
+		return JSON.stringify({ status: "error", message: "no applied edits to undo in this session" })
+	}
+	const snap = undoSnapshots.get(id)
+	if (!snap) {
+		return JSON.stringify({ status: "error", message: `unknown proposalId ${id} (or it was already undone)` })
+	}
+	const root = realpathSyncSafe(ctx.root)
+	const abs = resolve(root, snap.path)
+	if (!abs.startsWith(root)) {
+		return JSON.stringify({ status: "error", message: `proposal path escapes workspace: ${snap.path}` })
+	}
+	const { writeFile } = await import("node:fs/promises")
+	await writeFile(abs, snap.before, "utf8")
+	undoSnapshots.delete(id)
+	return JSON.stringify({ status: "undone", path: snap.path, proposalId: id, bytes: snap.before.length })
+}
+
 function runCommand(ctx: WorkspaceContext, args: Record<string, unknown>): Promise<string> {
 	const command = typeof args.command === "string" ? args.command.trim() : ""
 	if (!command) {
@@ -284,6 +308,7 @@ export const TOOL_NAMES = [
 	"editor_retrieve",
 	"editor_run_command",
 	"editor_propose_edit",
+	"editor_undo_last_edit",
 	"editor_diagnostics",
 ] as const
 
@@ -305,6 +330,8 @@ export async function callEditorTool(name: string, rawArgs: Record<string, unkno
 		}
 		case "editor_run_command":
 			return runCommand(ctx, rawArgs)
+		case "editor_undo_last_edit":
+			return undoLastEdit(ctx, rawArgs)
 		case "editor_propose_edit": {
 			// Called only AFTER TF's approval pause was answered allow — apply immediately.
 			const proposal = stageProposal(ctx, rawArgs)

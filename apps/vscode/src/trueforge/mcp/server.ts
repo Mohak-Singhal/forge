@@ -159,6 +159,10 @@ export class ForgeMcpServer {
 				description: "Fast syntax check for the workspace's Python files (py_compile). Use before and after edits.",
 				shape: { path: str().optional() },
 			},
+			editor_undo_last_edit: {
+				description: "Restore the exact pre-edit content of the most recent applied proposal (or a given proposalId). Approval still required. Later proposals on the same file are discarded too.",
+				shape: { proposalId: str().optional() },
+			},
 		}
 	}
 }
