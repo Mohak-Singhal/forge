@@ -1,3 +1,35 @@
+# Forge — Editor-native coding agent built on TrueForge
+
+> Forked from [cline/cline](https://github.com/cline/cline) at commit `eff43e19b267e171f597ab03733bfed25090f72d` (`main`, 2026-11-17).
+> Upstream LICENSE (Apache-2.0) is preserved unchanged in [`LICENSE`](./LICENSE).
+> TrueFoundry Forge-a-thon submission · 2026.
+
+**The fork point commit is the first commit on branch `forge`. Everything after that
+is the delta judges evaluate.**
+
+## What this is
+
+Forge is the Cline VS Code extension with the agent loop replaced by
+[TrueForge](https://github.com/truefoundry/trueforge). TrueForge handles sessions,
+turns, approvals, streaming, subagents, deferred tool loading and compaction.
+The extension handles everything else the agent needs from the editor — reading
+files, searching the workspace, showing diffs, applying accepted hunks.
+
+The agent definition used by this extension lives at
+[`.trueforge/agents/forge-editor.json`](./.trueforge/agents/forge-editor.json).
+
+## Setup (from clean clone)
+
+```bash
+git clone <repo-url> forge && cd forge
+python3 -m venv .venv && source .venv/bin/activate
+npx @truefoundry/trueforge@latest   # Terminal 1 — never deploy, always local
+# Register the agent definition (or create it in the TrueForge UI):
+curl -X POST http://localhost:8790/api/v1/agents -H 'Content-Type: application/json' \
+  -d @.trueforge/agents/forge-editor.json
+# Open the workspace and run Task A/B/C (?: see docs/round1/)
+```
+
 <p align="center">
   <img src="assets/icons/icon.png" width="80" alt="Cline" />
 </p>
