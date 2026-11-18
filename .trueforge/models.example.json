@@ -1,24 +1,36 @@
 {
   "providers": [
     {
-      "name": "local-ollama",
+      "name": "ollama-local",
       "type": "custom",
       "base_url": "http://localhost:11434/v1",
       "auth": { "api_key": "ollama" },
       "models": [
-        { "model_id": "qwen2.5-coder:7b", "name": "qwen25coder7b", "properties": { "context_length": 131072, "max_output_tokens": 64000 } }
+        {
+          "model_id": "qwen2.5-coder:7b",
+          "name": "qwen25coder7b",
+          "properties": { "context_length": 32768, "max_output_tokens": 16000 }
+        }
       ]
     },
     {
-      "name": "opencode-free-models",
+      "name": "openai-compatible",
       "type": "custom",
-      "base_url": "https://100milionseek.top/v1",
-      "auth": { "api_key": "ENV:HMS_API_KEY" },
+      "base_url": "http://localhost:8080/v1",
+      "auth": { "api_key": "ENV:OPENAI_API_KEY" },
       "models": [
-        { "model_id": "deepseek-v4.1-flash-free", "name": "deepseek-v41-flash-free", "properties": { "context_length": 198000, "max_output_tokens": 65536 } },
-        { "model_id": "jev-1.13-free", "name": "jev-113-free", "properties": { "context_length": 128000, "max_output_tokens": 4096 } }
+        {
+          "model_id": "provider/primary-model",
+          "name": "primarymodel",
+          "properties": { "context_length": 128000, "max_output_tokens": 16000 }
+        },
+        {
+          "model_id": "provider/fallback-model",
+          "name": "fallbackmodel",
+          "properties": { "context_length": 128000, "max_output_tokens": 16000 }
+        }
       ]
     }
   ],
-  "_comment": "Copy to TrueForge Settings → Models; never commit real keys. Keys live only in the TrueForge server config."
+  "_comment": "Example only. Copy into TrueForge Settings → Models with your own values. Keys live only in the TrueForge server config — never in this repo."
 }
