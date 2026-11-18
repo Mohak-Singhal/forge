@@ -139,8 +139,12 @@ export class ForgeMcpServer {
 			},
 			editor_retrieve: {
 				description:
-					"Retrieve the most relevant code chunks for a natural-language query (BM25). Use this before editing.",
-				shape: { query: str(), limit: z.number().optional() },
+					"Retrieve the most relevant code chunks for a natural-language query (BM25), packed into a token budget. Use this before editing.",
+				shape: {
+					query: str(),
+					limit: z.number().optional(),
+					budget_tokens: z.number().optional(),
+				},
 			},
 			editor_run_command: {
 				description:
@@ -149,7 +153,7 @@ export class ForgeMcpServer {
 			},
 			editor_propose_edit: {
 				description:
-					"Stage a multi-file edit as reviewable hunks. Nothing is written until the user approves the diff and applies it — this tool only computes and stages. Input: {path, summary, edits: [{oldText, newText, intent?}]}.",
+					"Propose an exact-hunk edit to one file. TrueForge pauses for approval; the editor shows the proposed change as a diff and the user keeps or skips each hunk. After approval this tool applies exactly the accepted hunks (a stale hunk is skipped, never guessed) and returns which applied and which were rejected. Input: {path, summary, edits: [{oldText, newText, intent?}]}.",
 				shape: {
 					path: str(),
 					summary: str().optional(),
@@ -162,7 +166,7 @@ export class ForgeMcpServer {
 			},
 			editor_undo_last_edit: {
 				description:
-					"Restore the exact pre-edit content of the most recent applied proposal (or a given proposalId). Approval still required. Later proposals on the same file are discarded too.",
+					"Restore the exact pre-edit content of the most recent applied proposal (or a given proposalId). Approval is required. Refuses if the file changed after that edit, so a newer change is never overwritten.",
 				shape: { proposalId: str().optional() },
 			},
 		}

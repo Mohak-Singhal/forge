@@ -136,8 +136,9 @@ export function retryDelayMs(attempt: number): number {
 
 /**
  * Whether a failure deserves another try against the *same* model before failing over.
- * Only transient conditions qualify: a refused connection or a 5xx is often a blip,
- * while a bad port or an invalid key will fail identically on every attempt.
+ * Only transient conditions qualify: a refused connection, a 429, or a 502/503/504 is
+ * often a blip, while a bad port, an invalid key or a plain 500 (typically a
+ * deterministic request error) will fail identically on every attempt.
  */
 export function isRetryableError(error: unknown): boolean {
 	const message = error instanceof Error ? error.message : String(error ?? "")
