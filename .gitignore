@@ -98,3 +98,8 @@ apps/examples/desktop-app/.cursor/settings.json
 .forge/
 .relay/
 GATES.md
+
+.forge/
+.relay/
+GATES.md
+.trueforge/models.local.json

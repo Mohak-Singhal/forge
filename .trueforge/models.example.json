@@ -1,0 +1,24 @@
+{
+  "providers": [
+    {
+      "name": "local-ollama",
+      "type": "custom",
+      "base_url": "http://localhost:11434/v1",
+      "auth": { "api_key": "ollama" },
+      "models": [
+        { "model_id": "qwen2.5-coder:7b", "name": "qwen25coder7b", "properties": { "context_length": 131072, "max_output_tokens": 64000 } }
+      ]
+    },
+    {
+      "name": "opencode-free-models",
+      "type": "custom",
+      "base_url": "https://100milionseek.top/v1",
+      "auth": { "api_key": "ENV:HMS_API_KEY" },
+      "models": [
+        { "model_id": "deepseek-v4.1-flash-free", "name": "deepseek-v41-flash-free", "properties": { "context_length": 198000, "max_output_tokens": 65536 } },
+        { "model_id": "jev-1.13-free", "name": "jev-113-free", "properties": { "context_length": 128000, "max_output_tokens": 4096 } }
+      ]
+    }
+  ],
+  "_comment": "Copy to TrueForge Settings → Models; never commit real keys. Keys live only in the TrueForge server config."
+}
