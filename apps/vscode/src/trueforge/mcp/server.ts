@@ -18,6 +18,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js"
 import type { WorkspaceContext } from "./tools"
 import { callEditorTool } from "./tools"
+import { Logger } from "@shared/services/Logger"
 
 export interface ForgeMcpServerOptions {
 	port?: number
@@ -55,44 +56,56 @@ export class ForgeMcpServer {
 			return
 		}
 		this.ctx = { root: workspaceRoot }
-		const mcp = new McpServer({ name: "vscode-editor-tools", version: "1.0.0" })
-		const schema = this.buildSchemas()
-		for (const [name, config] of Object.entries(schema)) {
-			const toolName = name
-			const shape = config.shape as z.ZodRawShape
-			const description = config.description
-			mcp.registerTool(
-				toolName,
-				{
-					description,
-					...(Object.keys(shape).length > 0 ? { inputSchema: shape } : {}),
-				},
-				async (args) => {
-					try {
-						const result = await callEditorTool(toolName, (args ?? {}) as Record<string, unknown>, { root: this.ctx?.root ?? workspaceRoot })
-						return { content: [{ type: "text" as const, text: result }] }
-					} catch (error) {
-						const message = error instanceof Error ? error.message : String(error)
-						return { content: [{ type: "text" as const, text: `error: ${message}` }], isError: true }
-					}
-				},
-			)
+
+		const buildMcp = (): McpServer => {
+			const mcp = new McpServer({ name: "vscode-editor-tools", version: "1.0.0" })
+			const schema = this.buildSchemas()
+			for (const [name, config] of Object.entries(schema)) {
+				const toolName = name
+				const shape = config.shape as z.ZodRawShape
+				const description = config.description
+				mcp.registerTool(
+					toolName,
+					{
+						description,
+						...(Object.keys(shape).length > 0 ? { inputSchema: shape } : {}),
+					},
+					async (args) => {
+						try {
+							const result = await callEditorTool(toolName, (args ?? {}) as Record<string, unknown>, { root: this.ctx?.root ?? workspaceRoot })
+							return { content: [{ type: "text" as const, text: result }] }
+						} catch (error) {
+							const message = error instanceof Error ? error.message : String(error)
+							return { content: [{ type: "text" as const, text: `error: ${message}` }], isError: true }
+						}
+					},
+				)
+			}
+			return mcp
 		}
 
 		this.server = createServer((req, res) => {
-			// Loopback-only dev endpoint: TF (same machine, same process) connects here.
-			// Defense in depth: require the per-run token as `x-forge-token` or a Bearer
-			// Authorization when FORGE_MCP_TOKEN is set. Unset → open (local dev convenience).
-			const expected = process.env.FORGE_MCP_TOKEN
-			const presented = (req.headers["x-forge-token"] as string | undefined) ?? req.headers.authorization?.replace(/^Bearer\s+/i, "")
-			if (expected && presented !== expected) {
-				res.writeHead(401, { "content-type": "application/json" })
-				res.end(JSON.stringify({ jsonrpc: "2.0", error: { code: -32001, message: "unauthorized" }, id: null }))
-				return
-			}
-			const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
-			mcp.connect(transport)
-			transport.handleRequest(req, res)
+			void (async () => {
+				try {
+					// Loopback-only dev endpoint: TF (same machine, same process) connects here.
+					// Stateless per-request server: fresh McpServer + transport, like the SDK docs show.
+					const mcp = buildMcp()
+					const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
+					await mcp.connect(transport)
+					try {
+						await transport.handleRequest(req, res)
+					} finally {
+						await transport.close()
+						await mcp.close()
+					}
+				} catch (error) {
+					Logger.error("[Forge] MCP stream error:", error)
+					if (!res.headersSent) {
+						res.writeHead(500, { "content-type": "application/json" })
+					}
+					res.end(JSON.stringify({ jsonrpc: "2.0", error: { code: -32603, message: "internal error" }, id: null }))
+				}
+			})()
 		})
 
 		await new Promise<void>((resolvePromise, reject) => {
