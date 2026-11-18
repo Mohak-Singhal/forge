@@ -1,7 +1,7 @@
 # Forge — Final Independent Audit (Round 1)
 
 Date: 2026-11-19 · Auditor: independent adversarial review of the real implementation
-Branch: `forge` · Audited starting HEAD: `91d2ecc`; inspection head after this audit: `c319dfe` (the brief expected `2c16e7c`;
+Branch: `forge` · Audited starting HEAD: `91d2ecc`; final HEAD: the tip of `forge` (the brief expected `2c16e7c`;
 `2c16e7c` **is** an ancestor of `91d2ecc`, so no history was rewritten — the branch simply
 had three documentation/audit commits on top). Fork point: `eff43e19b267e171f597ab03733bfed25090f72d` (Cline, Apache-2.0).
 
@@ -320,6 +320,7 @@ eb2556c fix(forge): honour @file:line-range mentions
 cff0d2f feat(forge): filter query filler and boost path relevance in retrieval
 f938c42 docs(forge): describe the write tool as it behaves; expose retrieval budget
 c319dfe docs(forge): correct the submission facts and add the independent audit
+b28f25e docs(forge): record final audit HEAD and commit set
 ```
 
 The working tree is clean after these commits; Flask is pristine at `22d92470` / `3.1.3`.
