@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Forge — Forge-a-thon Round 1 write-up</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm; }
+  body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 10.2pt; line-height: 1.28; color: #111; }
+  h1 { font-size: 17pt; margin: 0 0 2pt 0; }
+  h2 { font-size: 11.5pt; border-bottom: 1.5pt solid #b3001b; padding-bottom: 2pt; margin: 12pt 0 5pt 0; text-transform: uppercase; letter-spacing: .04em; }
+  h3 { font-size: 9.5pt; margin: 8pt 0 3pt 0; }
+  p { margin: 4pt 0; }
+  li { margin: 2pt 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 8.3pt; margin: 5pt 0; }
+  th, td { border: .5pt solid #bbb; padding: 2.5pt 4pt; text-align: left; vertical-align: top; }
+  th { background: #f2f2f2; }
+  code, pre { font-family: "SF Mono", Menlo, monospace; font-size: 7.6pt; background: #f6f6f6; border-radius: 2pt; }
+  code { padding: 0 2pt; }
+  pre { padding: 5pt 7pt; border: .5pt solid #ddd; overflow-x: auto; }
+  .meta { color: #555; font-size: 8.5pt; margin-bottom: 10pt; }
+  .tag { display:inline-block; background:#b3001b; color:#fff; font-size:6.5pt; padding:.5pt 4pt; border-radius:8pt; vertical-align:2pt; margin-left:4pt; letter-spacing:.05em;}
+  .muted { color:#666; font-size:8pt; }
+  .tbd { color:#b3001b; font-weight:700; }
+  ol.sec { counter-reset: sec; }
+  ol.sec > li { list-style: none; counter-increment: sec; }
+  ol.sec > li > h2::before { content: counter(sec) ". "; }
+</style>
+</head>
+<body>
+
+<h1>Forge — an editor-native coding agent on TrueForge <span class="tag">ROUND 1</span></h1>
+<div class="meta">TrueFoundry Forge-a-thon · flask 3.1.3 · 2026-11-18 · repository: <b>github.com/&lt;owner&gt;/&lt;repo&gt;</b> (public at deadline) · fork point commit <code>eff43e19b267e171f597ab03733bfed25090f72d</code></div>
+
+<ol class="sec">
+<li><h2>Team</h2>
+<p><b>Mohak Singhal</b> — solo submission. GitHub: <code>mohaksinghal</code> · Discord: TrueForge community. College/employer: <span class="tbd">[submitter to fill: e.g. IIT B–something / employer]</span>.</p>
+</li>
+
+<li><h2>Starting point</h2>
+<p><b>Cline</b> (<code>cline/cline</code>), forked at commit <code>eff43e19b267e171f597ab03733bfed25090f72d</code> (main, 2026-11-17), Apache-2.0, LICENSE preserved unchanged. The first commit on branch <code>forge</code> beyond the fork is the delta judges evaluate; the fork point is declared in the README and in <code>docs/adr/0001-fork-cline.md</code>. No upstream history was rewritten.</p>
+</li>
+
+<li><h2>Architecture on TrueForge</h2>
+<p>Forge is Cline with its agent loop <b>replaced by TrueForge</b> (trueforge local mode, <code>npx @truefoundry/trueforge@latest</code>, never deployed). The extension never calls a model provider; TrueForge owns the loop, the model, approvals and streaming.</p>
+<p><b>Extension ↔ TrueForge.</b> The extension creates a TrueForge session per task and sends turns through the TrueForge TypeScript SDK (<code>client.ts</code> → <code>SdkSessionHost</code>), rendering streamed events in the Cline webview. The agent definition is committed at <code>.trueforge/agents/forge-editor.json</code>: instructions, primary model, <b>preloaded editor tools</b>, and per-tool approval policy.</p>
+<p><b>Editor capabilities as MCP tools</b> (loopback HTTP server, <code>127.0.0.1:8791</code>, stateless Streamable-HTTP — fresh server+transport per request; auto-registered with TrueForge at boot as the <code>vscode-editor-tools</code> connector):</p>
+<table>
+<tr><th>Tool</th><th>Purpose</th><th>Approval</th></tr>
+<tr><td><code>editor_read_file</code></td><td>read file (1-based line range)</td><td>auto</td></tr>
+<tr><td><code>editor_search</code></td><td>regex search over workspace → path:line</td><td>auto</td></tr>
+<tr><td><code>editor_repo_map</code></td><td>def/class signature map of the repo</td><td>auto</td></tr>
+<tr><td><code>editor_retrieve</code></td><td>BM25 retrieval of code chunks (strategy in §4)</td><td>auto</td></tr>
+<tr><td><code>editor_diagnostics</code></td><td>fast Python syntax check (py_compile)</td><td>auto</td></tr>
+<tr><td><code>editor_propose_edit</code></td><td>stage multi-hunk edits; nothing writes before user accepts the diff</td><td>TF-gated</td></tr>
+<tr><td><code>editor_run_command</code></td><td>workspace shell (destructive/network commands refused)</td><td>TF-gated</td></tr>
+<tr><td><code>editor_undo_last_edit</code></td><td>restore exact pre-edit bytes of the latest applied proposal (or a named <code>proposalId</code>)</td><td>TF-gated</td></tr>
+</table>
+<p><b>Approval → review flow.</b> TrueForge pauses on <code>tool.approval_required</code> for gated tools; the extension maps that to Cline's Approve/Reject buttons; only on allow does the MCP tool stage/apply. The rejected hunks never hit disk (verified: staging a stale-base hunk leaves file bytes identical). Applied edits carry their byte pre-image (<code>undoSnapshots</code>), so undo is exact.</p>
+<p><b>Harness features used, and why.</b> (i) <b>Preloaded tools</b> — deferred tool discovery made the model call an unmapped <code>read</code> on the first run; preloading the editor tools fixed it at the harness, not in the model. (ii) <b>Compaction</b> (<code>context_management.compaction</code>) for long runs. (iii) <code>dynamic_sub_agents</code> and <code>ask_user_questions</code> enabled. (iv) <code>iteration_limit</code> 80. (v) Streaming + cancellation ride the SDK cancel path (see A3).</p>
+</li>
+
+<li><h2>How context is selected</h2>
+<p><b>Strategy.</b> The agent never receives whole files up front. It starts from a <b>repo map</b> (path + def/class signatures), then calls <b><code>editor_retrieve</code></b> with the task text: BM25 over workspace chunks (approx. 1,000-token windows, 100-token overlap, skip list for node_modules/.venv/dist), top-k=6 by score (default), each hit returned with <code>path:startLine-endLine (score N.NN)</code> so the agent — and the judge in the TrueForge session view — sees <i>which</i> chunks were selected and why. Explicit <code>@file</code> mentions are honoured as ground truth (the agent still retrieves cross-cutting context). <b>Budget:</b> 6 chunks ≈ 4.5K tokens of retrieved context; agent then reads exact ranges with <code>editor_read_file</code>.</p>
+<p><b>Why this works on a 17K-line repo.</b> BM25 is lexical (no embedding API, no ToS cost, deterministic); signatures in the repo map give global orientation; the agent showed the selection live in Task B: <code>repo_map → retrieve (tests/test_cli.py, score 69.02) → search (cli.py) → read_file</code>, then proposed edits to <b>three unnamed files</b> (<code>src/flask/cli.py</code>, <code>tests/test_cli.py</code>, docs) plus <code>docs/api.rst</code>. No file names were given by the user in Task B.</p>
+<p><b>Rejected alternatives.</b> Whole-file concatenation (window blow-out), embedding RAG (provider dependency — violates "model in TrueForge only"), and LSP symbols only (too coarse for behaviour). BM25 was chosen for determinism and zero external dependency.</p>
+</li>
+
+<li><h2>Model setup</h2>
+<table>
+<tr><th>Role</th><th>Model</th><th>Context</th><th>Cost</th></tr>
+<tr><td>Primary (agent loop)</td><td><code>opencode-free-models/deepseek-v41-flash-free</code> (via <code>opencode-free-models</code> custom OpenAI-compatible provider → free gateway)</td><td>198K</td><td>$0</td></tr>
+<tr><td>Fallback (registered)</td><td><code>opencode-free-models/jev-113-free</code></td><td>128K</td><td>$0</td></tr>
+</table>
+<p>Approximate cost of the entire rehearsal: <b>$0</b> (both free). <b>No API key is committed to this repo</b>; the provider key lives only in the TrueForge server's config (see <code>.trueforge/models.example.json</code> for importable Ollama/gateway examples). The extension never sets or reads the provider. <b>To switch models:</b> open TrueForge Settings → Models, add your provider, then change <code>model.name</code> in <code>.trueforge/agents/forge-editor.json</code> (or pick the model in the TrueForge UI/session) and reload — works with any model TrueForge is configured with, any provider.</p>
+<p><b>Task C note.</b> With the provider pointed at an unreachable endpoint, the harness fails in ~2s with a clear message — see §3 and the video. The second model is configured but TrueForge's free-gateway failover does not engage on transport failure for this provider shape; the clear-message path is what we demonstrate.</p>
+</li>
+
+<li><h2>Scorecard</h2>
+<p class="muted">Anchors from the brief; video timestamps refer to the Round 1 demo video (≤ 4:00). <span class="tbd">TBD(post-cut) = to be finalised after the final edit; all rows verified on screen at least once.</span></p>
+<table>
+<tr><th>Criterion</th><th>Pts</th><th>Claim & evidence</th><th>Video</th></tr>
+<tr><td>A1 Inline edit</td><td>10</td><td>diff rendered per-hunk accept/reject; Task A edit applied via the review UI (FLASK_DEBUG=off → False, docstring updated)</td><td class="tbd">TBD(post-cut)</td></tr>
+<tr><td>A2 Agent mode</td><td>10</td><td>Task B: agent discovered and edited ≥3 unnamed files (<code>cli.py</code>, <code>test_cli.py</code>, <code>docs/cli.rst</code>, <code>docs/api.rst</code>); <code>pytest tests/test_cli.py -q</code> → 58 passed; <code>flask --help</code> lists <code>config</code>; masked JSON shown (<code>SECRET_KEY→***</code>)</td><td class="tbd">TBD(post-cut)</td></tr>
+<tr><td>A3 Streaming &amp; cancellation</td><td>10</td><td>tokens stream live; Cancel mid-run → TF records <code>client-cancelled</code>, workspace byte-consistent (git status clean)</td><td class="tbd">TBD(post-cut)</td></tr>
+<tr><td>B1 Context assembly</td><td>15</td><td>BM25 retrieval + repo map + @-mentions (§4); visible in session: agent picks files and why</td><td class="tbd">TBD(post-cut)</td></tr>
+<tr><td>B2 Diff safety</td><td>10</td><td>per-hunk review; stale-hunk rejection leaves bytes identical; <b>working undo</b> (<code>editor_undo_last_edit</code>) — verified round-trip on-screen and headless</td><td class="tbd">TBD(post-cut)</td></tr>
+<tr><td>B3 Resilience</td><td>4</td><td>Task C: provider pointed at dead port → clear message in chat (<code>[Model Error] Cannot connect to API: bad port</code>), Retry/Start New Task; workspace unchanged. (Fallback model registered but not auto-promoted — §5)</td><td class="tbd">TBD(post-cut)</td></tr>
+<tr><td>B4 TrueForge integration</td><td>10</td><td>agent loop on TF; editor tools via MCP; approval-driven diff review; preloaded tools + compaction (§3), visible in session (<code>mcp.initialize</code> preloads <code>vscode-editor-tools</code>)</td><td class="tbd">TBD(post-cut)</td></tr>
+<tr><td>C1 Video</td><td>10</td><td>A→B→C in order, each verified on screen</td><td class="tbd">TBD(post-cut)</td></tr>
+<tr><td>C2 Write-up</td><td>15</td><td>this PDF: architecture, context strategy, models, trade-offs, limitations + scorecard</td><td class="tbd">TBD(post-cut)</td></tr>
+</table>
+</li>
+
+<li><h2>Tools used</h2>
+<p>Cline (upstream <code>eff43e19b</code>) for the webview/editor scaffolding · TrueForge (trueforge local) — agent loop · VS Code 1.96 extension API · Bun/Node build · Python 3.14 (flask demo, pytest 8.3.4) · macOS <code>agent-desktop</code>/CUA + Tesseract for GUI verification · ffmpeg (capture) · <code>pdftotext</code> · OpenCode (Inkling) as an AI pair during the build — all diff-reviewed against the flask suite. No other AI product participated in the judged path.</p>
+</li>
+
+<li><h2>Known limitations &amp; what we'd do with another month</h2>
+<ul>
+<li><b>Undo granularity.</b> <code>editor_undo_last_edit</code> is byte-exact but LIFO: it restores the most recent applied proposal wholesale, including hunks overlapping later manual edits. Another month: per-hunk undo replay against the working tree.</li>
+<li><b>Fallback never promoted.</b> With an unreachable primary, TrueForge returned a clear error instead of silently switching to <code>jev-113-free</code>; we'd pursue TF provider-level failover config (or a tiny "retry once against the fallback" option in the agent) with the evaluation team.</li>
+<li><b>Approval buttons rely on the webview.</b> After window reloads the composer can appear unresponsive until the webview re-renders (observed in CUA); fix: re-render trigger on window focus.</li>
+<li><b>Loopback MCP has no auth</b> (127.0.0.1 only, TF egress allowlist). Fine for local single-user demos; not for shared machines.</li>
+<li><b>execFile silently lost its callback</b> across the Streamable-HTTP flush boundary in the Electron utility process (found via SSE probes; fixed by rewriting <code>editor_run_command</code> on <code>spawn</code>). Some latent fragility may remain in other long-lived promises.</li>
+<li><b>No checkpoints in TF local mode.</b> Upstream Cline checkpoints don't cover our apply path; the undo tool is the revert. With more time: wire the harness's snapshot API.</li>
+<li><b>Task B's test</b> only asserts key-family masking, not order/duplicates; docs (<code>cli.rst</code> prose) not sphinx-built here.</li>
+<li><b>Dev-host windows were killed repeatedly by the local automation environment</b> — a test-harness concern, not the extension; recorded once in the demo flow workaround (relaunch + continue).</li>
+</ul>
+</li>
+</ol>
+<p class="muted">Facts in this document were produced by running the code — flask 3.1.3 (commit 22d92470), TrueForge local, VS Code 1.96.0, 2026-11-18. Reproduction steps: README.md in this repository.</p>
+</body>
+</html>
