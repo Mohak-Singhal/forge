@@ -20,15 +20,89 @@ The agent definition used by this extension lives at
 
 ## Setup (from clean clone)
 
+**Prerequisites:** macOS or Linux, Node ≥ 22, Bun 1.4.2, Python 3.11+ (only for the
+Flask demo repository), VS Code ≥ 1.96, git.
+
 ```bash
-git clone <repo-url> forge && cd forge
-python3 -m venv .venv && source .venv/bin/activate
-npx @truefoundry/trueforge@latest   # Terminal 1 — never deploy, always local
-# Register the agent definition (or create it in the TrueForge UI):
-curl -X POST http://localhost:8790/api/v1/agents -H 'Content-Type: application/json' \
-  -d @.trueforge/agents/forge-editor.json
-# Open the workspace and run Task A/B/C (?: see docs/round1/)
+git clone https://github.com/<owner>/<repo>.git && cd <repo>
+bun install
+bun run build:sdk            # SDK packages resolve via compiled dist/
+bun run package              # builds apps/vscode/dist/extension.js
 ```
+
+### 1. Start TrueForge (local mode, never deployed)
+
+```bash
+OUTBOUND_URL_ALLOWED_HOSTS='["127.0.0.1","localhost"]' npx @truefoundry/trueforge@latest
+```
+
+Plain `npx @truefoundry/trueforge@latest` also works, but then TrueForge blocks the
+loopback connection to the extension's MCP server — the extension logs the failure and
+the agent surfaces a clear error. The loopback allowlist is required for the editor
+tools to reach the agent.
+
+TrueForge listens on `http://localhost:8790`. Open `http://localhost:8790/settings/models`
+and register a provider — a gateway, a free tier, or a model running locally behind an
+OpenAI-compatible endpoint. See [`.trueforge/models.example.json`](./.trueforge/models.example.json)
+for importable examples (Ollama, and a generic OpenAI-compatible entry with a primary and
+a fallback model). **The extension never calls a model provider directly; all model
+traffic goes through TrueForge.** Keys live only in the TrueForge server's config —
+never in this repository.
+
+For the reference development run, we used a custom OpenAI-compatible provider
+(`opencode-free-models`, free gateway) with two models: `deepseek-v41-flash-free`
+(primary) and `jev-113-free` (fallback). Approximate cost: $0.
+
+### 2. Load the extension and point it at a workspace
+
+```bash
+code --extensionDevelopmentPath="$PWD/apps/vscode" <path-to-workspace>
+```
+
+On activation the extension:
+
+1. starts the loopback MCP server on `127.0.0.1:8791` exposing the editor capabilities
+   (`editor_read_file`, `editor_search`, `editor_repo_map`, `editor_retrieve`,
+   `editor_diagnostics`, `editor_propose_edit`, `editor_run_command`);
+2. upserts the `vscode-editor-tools` connector into TrueForge at
+   `http://127.0.0.1:8791/mcp`;
+3. loads the agent definition from [`.trueforge/agents/forge-editor.json`](./.trueforge/agents/forge-editor.json)
+   — instructions, the primary model, preloaded editor tools, and per-tool approval
+   requirements (`editor_propose_edit` and `editor_run_command` require human approval;
+   nothing touches disk before you accept the hunks in the review UI).
+
+Open the Cline view in the Activity Bar, pick **Act**, type a task, and accept or reject
+each proposal inline. The diff preview is per-hunk, exactly as accepted/rejected in chat;
+an applied change can be undone like any other Cline edit.
+
+### Judged tasks (flask 3.1.3)
+
+Clone and check out the pinned tag, then open it as the workspace:
+
+```bash
+git clone https://github.com/pallets/flask flask3 && cd flask3 && git checkout 3.1.3
+```
+
+- **Task A** (inline edit): `Select the function get_debug_flag ...` — accept the hunks,
+  then verify `FLASK_DEBUG=off python -c "from flask.helpers import get_debug_flag; print(get_debug_flag())"` prints `False`.
+- **Task B** (agent mode): `Add a new built-in CLI command flask config ...` (exact wording
+  in the competition brief) — the diff touches `src/flask/cli.py`, `tests/test_cli.py`,
+  `docs/cli.rst` and `docs/api.rst`; `pytest tests/test_cli.py -q` passes and
+  `flask config` prints the loaded config as JSON with SECRET/PASSWORD/TOKEN/KEY values
+  masked as `***`.
+- **Task C** (resilience): point TrueForge at an unreachable endpoint (Settings → Models →
+  change the provider `base_url`), repeat Task A — the editor stays responsive, the chat
+  shows the harness's own error (`[Model Error] Cannot connect to API: bad port`) with
+  Retry / Start New Task, and `git status` stays clean. Restore the provider and save.
+
+### What changed vs upstream (delta judges evaluate)
+
+19 files changed from the fork point, all committed on `forge`. See
+[`docs/adr/0001-fork-cline.md`](./docs/adr/0001-fork-cline.md) for the fork declaration
+and [`GATES.md`](./GATES.md) for the Round 1 verification ledger. In short: the Cline
+agent loop is replaced by TrueForge sessions/turns; editor capabilities are exposed as
+MCP tools to the TrueForge agent; diff review flows through TrueForge tool approval;
+streaming/cancellation flow through the same SDK machinery.
 
 <p align="center">
   <img src="assets/icons/icon.png" width="80" alt="Cline" />
