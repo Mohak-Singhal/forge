@@ -23,7 +23,13 @@ export async function bootForge(context: vscode.ExtensionContext, options: Forge
 		Logger.log("[Forge] no workspace folder — forge tools disabled")
 		return
 	}
-	const token = process.env.FORGE_MCP_TOKEN ?? randomBytes(16).toString("hex")
+	// Stable per-install token (persisted) so the TF connector and the loopback server
+	// always agree, even across reloads — reloading the window re-upserts TF with it.
+	let token = process.env.FORGE_MCP_TOKEN ?? (context.globalState.get<string>("forge.mcpToken"))
+	if (!token) {
+		token = randomBytes(16).toString("hex")
+		await context.globalState.update("forge.mcpToken", token)
+	}
 	process.env.FORGE_MCP_TOKEN = token
 	try {
 		await forgeMcpServer.start(options.workspaceRoot)
