@@ -16,7 +16,7 @@ Cline panel visible · terminal font big · screen aspect 16:9 · **you hit reco
    `Add a new built-in CLI command flask config that prints the loaded application's configuration as JSON, masking the values of any key containing SECRET, PASSWORD, TOKEN or KEY as "***". It must appear in flask --help, be covered by a test, and be documented alongside the other built-in commands.`
 2. Agent shows discovery (repo_map → retrieve → search cli.py → read_file on cli.py, cli.rst, test_cli.py). No file names were given.
 3. Approve each proposal: src/flask/cli.py (config command registered in FlaskGroup), tests/test_cli.py (new TestConfig class), docs/cli.rst ("Show the Config"), docs/api.rst (autodata config_command).
-4. TrueForge session visible for this run briefly (browser tab http://localhost:8790 sessions view or the extension's event log) — judges need to see turns + tool calls.
+4. TrueForge session visible for this run briefly — ego lite window, already on screen showing the sessions list; click the new flask session; the detail shows TURN=1, model `opencode-free-models/deepseek-v41-flash-free`, TOOL CALLS count, timeline and "Agent steps" (editor_repo_map → editor_retrieve → …). (navigate with: ego-browser → goto `http://localhost:8790/sessions?view=sessions`, `Emulation.setDeviceMetricsOverride {width:1320, height:660, deviceScaleFactor:2}` — the window's webview is a fixed 660×660 so the desktop SPA needs the emulated viewport; leave the window on the session detail for the camera.)
 5. Verification on screen — terminal:
    - `.venv/bin/python -m pytest tests/test_cli.py -q` → **58 passed**
    - `.venv/bin/flask --help | grep -A2 config` → command listed
