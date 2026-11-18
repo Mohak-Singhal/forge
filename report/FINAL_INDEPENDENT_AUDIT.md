@@ -1,7 +1,7 @@
 # Forge — Final Independent Audit (Round 1)
 
 Date: 2026-11-19 · Auditor: independent adversarial review of the real implementation
-Branch: `forge` · Audited starting HEAD: `91d2ecc` (the brief expected `2c16e7c`;
+Branch: `forge` · Audited starting HEAD: `91d2ecc`; inspection head after this audit: `c319dfe` (the brief expected `2c16e7c`;
 `2c16e7c` **is** an ancestor of `91d2ecc`, so no history was rewritten — the branch simply
 had three documentation/audit commits on top). Fork point: `eff43e19b267e171f597ab03733bfed25090f72d` (Cline, Apache-2.0).
 
@@ -311,4 +311,15 @@ Gates/tools: `.unlazy/verify/writeup.mjs`, `.unlazy/verify/demo-script.mjs`,
 Docs: `README.md`, `GATES.md`, `report/demo-script.md`, `report/forge-writeup.html`,
 `report/forge-writeup.pdf`, this report, `report/evidence/`.
 
-Commits are listed in the final response and in `git log --oneline forge`.
+Commits added by this audit:
+
+```text
+afa8fc7 fix(forge): fail closed without a hunk review; never auto-approve write tools
+38d87e8 fix(forge): resolve streamed approval input and make cancellation safe
+eb2556c fix(forge): honour @file:line-range mentions
+cff0d2f feat(forge): filter query filler and boost path relevance in retrieval
+f938c42 docs(forge): describe the write tool as it behaves; expose retrieval budget
+c319dfe docs(forge): correct the submission facts and add the independent audit
+```
+
+The working tree is clean after these commits; Flask is pristine at `22d92470` / `3.1.3`.
