@@ -51,6 +51,7 @@ import { EDIT_PREVIEW_URI_SCHEME, editPreviewContentProvider, VscodeEditPreview 
 import { VscodeWebviewProvider } from "./hosts/vscode/VscodeWebviewProvider"
 import { exportVSCodeStorageToSharedFiles } from "./hosts/vscode/vscode-to-file-migration"
 import { ExtensionRegistryInfo } from "./registry"
+import { bootForge } from "./trueforge/boot"
 import { AuthService, LogoutReason } from "./sdk/auth-service"
 import { telemetryService } from "./services/telemetry"
 import type { RolloutBundleActivation } from "./services/telemetry/rollout-metadata"
@@ -83,6 +84,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	// 3. One-time export of VSCode's native storage to shared file-backed stores.
 	// After this, all platforms (VSCode, CLI, JetBrains) read from ~/.cline/data/.
 	const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+	await bootForge(context, { workspaceRoot: workspacePath })
 	const storageContext = createStorageContext({ workspacePath })
 	await exportVSCodeStorageToSharedFiles(context, storageContext)
 	migrateOpenAiCompatibleBaseUrlToV1(storageContext)
