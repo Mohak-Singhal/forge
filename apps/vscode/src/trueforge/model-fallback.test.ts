@@ -153,3 +153,12 @@ describe("decideRetry", () => {
 		expect(decision.shouldRetry).toBe(false)
 	})
 })
+
+describe("real gateway timeout failure", () => {
+	it("is treated as a model failure deserving failover", () => {
+		const message =
+			"[Model Error] Request failed (200): Failed to process successful response: Failed to process successful response: terminated: Body Timeout Error"
+		expect(isModelUnavailableError(new Error(message))).toBe(true)
+		expect(isRetryableError(new Error(message))).toBe(true)
+	})
+})

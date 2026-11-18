@@ -25,6 +25,8 @@ const TRANSPORT_ERROR_PATTERNS = [
 	/econnrefused/i,
 	/enotfound/i,
 	/etimedout/i,
+	/body timeout/i,
+	/request failed/i,
 	/connection (refused|reset|error)/i,
 	/fetch failed/i,
 	/socket hang up/i,
@@ -145,7 +147,7 @@ export function isRetryableError(error: unknown): boolean {
 	if (/bad port|invalid api key|unauthorized|\b401\b|\b403\b|model not found|no such model/i.test(message)) {
 		return false
 	}
-	return /econnreset|etimedout|socket hang up|network error|fetch failed|connection reset|\b502\b|\b503\b|\b504\b|rate.?limit|\b429\b/i.test(
+	return /econnreset|etimedout|body timeout|socket hang up|network error|fetch failed|connection reset|\b502\b|\b503\b|\b504\b|rate.?limit|\b429\b/i.test(
 		message,
 	)
 }

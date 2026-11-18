@@ -113,6 +113,28 @@ function nowIso(): string {
 	return new Date().toISOString()
 }
 
+/**
+ * Resolve the input of a tool awaiting TrueForge approval.
+ *
+ * The harness approval event identifies a tool call by ID but frequently sends an
+ * empty `input` object; the real arguments are on the tracked `model.message` tool
+ * call. Taking the empty object at face value makes the diff review see no path or
+ * hunks and silently fall back to a bare Approve button, so prefer the tracked
+ * arguments whenever the approval input carries nothing.
+ */
+export function resolveApprovalInput(callInput: unknown, trackedArguments?: string): unknown {
+	const empty =
+		callInput === undefined || (typeof callInput === "object" && callInput !== null && Object.keys(callInput).length === 0)
+	if (!empty || !trackedArguments) {
+		return callInput
+	}
+	try {
+		return JSON.parse(trackedArguments)
+	} catch {
+		return { raw: trackedArguments }
+	}
+}
+
 function stageEvent(sessionId: string, event: AgentEvent): CoreSessionEvent {
 	return { type: "agent_event", payload: { sessionId, event } } as CoreSessionEvent
 }
@@ -664,14 +686,7 @@ export class TrueForgeSessionHost implements SdkSessionHost {
 		for (const call of approval.toolCalls) {
 			const tracked = state?.turn?.contentAccumulator.toolCalls.get(call.id)
 			const toolName = call.toolName ?? tracked?.name ?? "vscode-editor-tools__unknown"
-			let parsedInput: unknown = call.input
-			if (parsedInput === undefined && tracked?.arguments) {
-				try {
-					parsedInput = JSON.parse(tracked.arguments)
-				} catch {
-					parsedInput = { raw: tracked.arguments }
-				}
-			}
+			const parsedInput = resolveApprovalInput(call.input, tracked?.arguments)
 			if (!this.requestToolApproval) {
 				// No UI wired (headless/test): auto-approve read-only tools, reject writes.
 				const readOnly = /^(vscode-editor-tools__)?editor_(read_file|search|retrieve|repo_map|diagnostics)$/.test(
