@@ -93,6 +93,17 @@ export interface TrueForgeSessionHostOptions {
 	askQuestion?: (question: string, options: string[], _context: unknown) => Promise<{ text: string }>
 	/** Test seam: replaces the backoff sleep so retry tests run instantly. */
 	sleep?: (ms: number) => Promise<void>
+	/**
+	 * Upper bound on how long `abort` waits for the harness to acknowledge a cancel.
+	 * The user's stop must take effect immediately even if the harness cancel request
+	 * hangs; a hung acknowledgement must never keep the spinner up.
+	 */
+	cancelRequestTimeoutMs?: number
+	/**
+	 * Test seam: replaces the TrueForge client so the retry/cancel loop can be driven
+	 * without a live harness. Production always builds a real client from `trueforgeUrl`.
+	 */
+	client?: TrueForgeClient
 }
 
 interface TurnState {
@@ -107,6 +118,18 @@ interface TurnState {
 	terminalStatus?: string
 	/** The harness's failure message for the current turn, if any. */
 	terminalMessage?: string
+	/**
+	 * Maps a streamed tool-call `index` to the tool-call id announced on its first
+	 * delta. Argument fragments arrive on later deltas without an id, so the index is
+	 * the only join key available while the model is still emitting the call.
+	 */
+	toolCallIndex?: Map<number, string>
+	/**
+	 * Set the moment the user cancels. The retry/failover loop checks it before and
+	 * after every backoff sleep, so a cancel during a retry wait ends the turn instead
+	 * of letting the loop fire another model call behind the user's back.
+	 */
+	cancelled?: boolean
 }
 
 function nowIso(): string {
@@ -148,6 +171,7 @@ export class TrueForgeSessionHost implements SdkSessionHost {
 	private readonly listeners = new Set<(event: CoreSessionEvent) => void>()
 	/** Backoff sleep; injectable so tests do not wait real time. */
 	private readonly sleep: (ms: number) => Promise<void>
+	private readonly cancelRequestTimeoutMs: number
 	/** sessionId (=TF session id) */
 	private readonly sessions = new Map<string, { turn?: TurnState; createdAt: string; cwd: string; prompt: string }>()
 
@@ -155,9 +179,10 @@ export class TrueForgeSessionHost implements SdkSessionHost {
 		this.url = (options.trueforgeUrl ?? process.env.TRUEFORGE_URL ?? "http://localhost:8790").replace(/\/$/, "")
 		this.runtimeAddress = this.url
 		this.extensionPath = options.extensionPath
-		this.client = new TrueForgeClient(this.url)
+		this.client = options.client ?? new TrueForgeClient(this.url)
 		this.requestToolApproval = options.requestToolApproval
 		this.sleep = options.sleep ?? defaultSleep
+		this.cancelRequestTimeoutMs = options.cancelRequestTimeoutMs ?? 2_000
 	}
 
 	static async create(options: TrueForgeSessionHostOptions): Promise<TrueForgeSessionHost> {
@@ -225,8 +250,10 @@ export class TrueForgeSessionHost implements SdkSessionHost {
 		const turn = state.turn
 		turn.iteration += 1
 		turn.contentAccumulator = { text: "", toolCalls: new Map() }
+		turn.toolCallIndex = new Map()
 		turn.usage = { inputTokens: 0, outputTokens: 0, cost: 0 }
 		turn.finished = false
+		turn.cancelled = false
 		state.prompt = input.prompt
 		this.emit({
 			type: "status",
@@ -267,6 +294,12 @@ export class TrueForgeSessionHost implements SdkSessionHost {
 		 * then give up with a message naming everything that was tried.
 		 */
 		const handleFailure = async (error: unknown): Promise<"retried" | "failed_over" | "stop"> => {
+			// A cancel can make the in-flight stream throw (aborted request). That is not a
+			// model failure and must not be retried, failed over, or reported as an error.
+			if (turn.cancelled) {
+				lastError = undefined
+				return "stop"
+			}
 			lastError = error
 			const retry = decideRetry(activeModel, error, modelAttempts)
 			if (retry.shouldRetry) {
@@ -282,6 +315,11 @@ export class TrueForgeSessionHost implements SdkSessionHost {
 					} as AgentContentStartEvent),
 				)
 				await this.sleep(retry.delayMs)
+				// A cancel during the backoff must not be followed by another model call.
+				if (turn.cancelled) {
+					lastError = undefined
+					return "stop"
+				}
 				return "retried"
 			}
 			const decision = decideFallback(chain, activeModel, error, modelIndex + 1)
@@ -297,6 +335,10 @@ export class TrueForgeSessionHost implements SdkSessionHost {
 		}
 
 		for (;;) {
+			if (turn.cancelled) {
+				lastError = undefined
+				break
+			}
 			modelAttempts += 1
 			turn.terminalStatus = undefined
 			turn.terminalMessage = undefined
@@ -329,7 +371,7 @@ export class TrueForgeSessionHost implements SdkSessionHost {
 				}
 			}
 		}
-		if (lastError !== undefined) {
+		if (lastError !== undefined && !turn.cancelled) {
 			const message = exhaustedMessage(chain, lastError)
 			Logger.error(`[TrueForge] turn stream failed: ${message}`)
 			this.emit(
@@ -541,8 +583,17 @@ export class TrueForgeSessionHost implements SdkSessionHost {
 				const done = event as unknown as { state?: { status?: string; code?: string; message?: string } }
 				const stateKind = done.state?.status ?? "done"
 				if (stateKind === "done" || stateKind === "cancelled" || stateKind === "failed" || stateKind === "error") {
-					const isError = stateKind === "failed" || stateKind === "error"
-					const reason = stateKind === "done" ? "stop" : stateKind === "cancelled" ? "aborted" : "error"
+					// A user cancel surfaces here as whatever terminal state the aborted request
+					// lands in. Report it as an abort, never as a model error.
+					const cancelledByUser = !!turn?.cancelled
+					const isError = (stateKind === "failed" || stateKind === "error") && !cancelledByUser
+					const reason = cancelledByUser
+						? "aborted"
+						: stateKind === "done"
+							? "stop"
+							: stateKind === "cancelled"
+								? "aborted"
+								: "error"
 					const failureMessage = done.state?.message?.trim()
 					// Record the terminal state so the turn driver can decide whether this is a
 					// model-availability failure worth failing over, or a task failure to report.
@@ -565,6 +616,12 @@ export class TrueForgeSessionHost implements SdkSessionHost {
 								conversationId: sessionId,
 							} as AgentErrorEvent),
 						)
+					}
+					if (turn) {
+						if (cancelledByUser) {
+							turn.terminalStatus = "cancelled"
+							turn.terminalMessage = undefined
+						}
 					}
 					this.emit(
 						stageEvent(sessionId, {
@@ -661,11 +718,35 @@ export class TrueForgeSessionHost implements SdkSessionHost {
 		const state = this.sessions.get(sessionId)
 		if (!state?.turn) return
 		const fn = toolCall.function as { name?: string; arguments?: string } | undefined
-		const id = String(toolCall.id ?? "")
-		if (!id) return
-		state.turn.contentAccumulator.toolCalls.set(id, {
-			id,
-			name: fn?.name ?? "unknown",
+		const rawId = typeof toolCall.id === "string" ? toolCall.id : ""
+		const index = typeof toolCall.index === "number" ? toolCall.index : undefined
+		const accumulator = state.turn.contentAccumulator.toolCalls
+		state.turn.toolCallIndex ??= new Map()
+
+		// First delta of a call: it announces the id (and possibly the tool name). Later
+		// deltas stream `function.arguments` fragments with only an index — the id is
+		// absent. Appending by index is what makes the approval review see the real
+		// arguments; ignoring those fragments leaves it with an empty object.
+		if (!rawId) {
+			if (index === undefined) return
+			const knownId = state.turn.toolCallIndex.get(index)
+			if (!knownId) return
+			const existing = accumulator.get(knownId)
+			if (!existing) return
+			existing.arguments += fn?.arguments ?? ""
+			return
+		}
+
+		// A delta or final message that carries the id is authoritative for the start of
+		// the call: (re)set it rather than appending, so a provider that resends the full
+		// arguments cannot duplicate them.
+		if (index !== undefined) {
+			state.turn.toolCallIndex.set(index, rawId)
+		}
+		const previous = accumulator.get(rawId)
+		accumulator.set(rawId, {
+			id: rawId,
+			name: fn?.name ?? previous?.name ?? "unknown",
 			arguments: fn?.arguments ?? "",
 		})
 	}
@@ -707,6 +788,16 @@ export class TrueForgeSessionHost implements SdkSessionHost {
 				conversationId: sessionId,
 				policy: { enabled: true, autoApprove: false },
 			})
+			// The user may have stopped the task while this approval was on screen. A write
+			// approved after cancellation must not run: the turn is over and the workspace
+			// is expected to be untouched. Deny instead of forwarding the stale approval.
+			if (state?.turn?.cancelled) {
+				await this.client.sendToolApproval(sessionId, turnId, approval.threadId, call.id, {
+					status: "deny",
+					reason: "cancelled by the user while this tool approval was pending",
+				})
+				continue
+			}
 			await this.client.sendToolApproval(sessionId, turnId, approval.threadId, call.id, {
 				status: decision.approved ? "allow" : "deny",
 				reason: decision.reason,
@@ -739,16 +830,25 @@ export class TrueForgeSessionHost implements SdkSessionHost {
 			)
 		}
 		turn.contentAccumulator = { text: "", toolCalls: new Map() }
+		turn.toolCallIndex = new Map()
 		turn.terminalStatus = undefined
 		turn.terminalMessage = undefined
 	}
 
 	async abort(sessionId: string, _reason?: unknown): Promise<void> {
-		try {
-			await this.client.cancelTurn(sessionId)
-		} catch (error) {
-			Logger.warn(`[TrueForge] cancel failed: ${error instanceof Error ? error.message : String(error)}`)
+		// Mark first, then tell the harness: the retry loop may be mid-backoff and must
+		// see the flag even if the cancel request itself is slow or fails.
+		const state = this.sessions.get(sessionId)
+		if (state?.turn) {
+			state.turn.cancelled = true
 		}
+		// Tell the harness, but never let a hung acknowledgement hold the UI. The turn
+		// stops locally on the flag regardless; the request is best-effort cleanup.
+		const cancel = this.client.cancelTurn(sessionId).catch((error) => {
+			Logger.warn(`[TrueForge] cancel failed: ${error instanceof Error ? error.message : String(error)}`)
+		})
+		const bounded = new Promise<void>((resolve) => setTimeout(resolve, this.cancelRequestTimeoutMs))
+		await Promise.race([cancel, bounded])
 		this.emit({ type: "ended", payload: { sessionId, reason: "aborted", ts: Date.now() } } as CoreSessionEvent)
 	}
 
