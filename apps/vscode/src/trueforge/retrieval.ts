@@ -69,6 +69,84 @@ const MAX_FILE_BYTES = 512 * 1024
 const MAX_FILES = 4000
 const CHUNK_LINES = 40
 
+/**
+ * English function words plus the filler that shows up in task descriptions
+ * ("add a new ... that prints ... as ..."). Without this filter, BM25 scores "as",
+ * "in" and "that" like real signal and a chunk of prose can outrank the module the
+ * task is actually about — a CLI question surfacing `testing.py` above `cli.py`.
+ */
+const STOPWORDS = new Set([
+	"a",
+	"an",
+	"and",
+	"are",
+	"as",
+	"at",
+	"be",
+	"been",
+	"but",
+	"by",
+	"can",
+	"do",
+	"does",
+	"for",
+	"from",
+	"has",
+	"have",
+	"how",
+	"if",
+	"in",
+	"into",
+	"is",
+	"it",
+	"its",
+	"may",
+	"must",
+	"new",
+	"not",
+	"of",
+	"on",
+	"or",
+	"our",
+	"out",
+	"should",
+	"so",
+	"such",
+	"than",
+	"that",
+	"the",
+	"their",
+	"them",
+	"then",
+	"there",
+	"these",
+	"they",
+	"this",
+	"to",
+	"up",
+	"use",
+	"using",
+	"was",
+	"we",
+	"were",
+	"what",
+	"when",
+	"where",
+	"which",
+	"while",
+	"who",
+	"will",
+	"with",
+	"would",
+	"you",
+	"your",
+	"add",
+	"make",
+	"need",
+	"please",
+	"want",
+])
+
 function tokenize(text: string): string[] {
 	const out: string[] = []
 	const matches = text.toLowerCase().match(/[a-z0-9_]{2,}/g)
@@ -76,6 +154,13 @@ function tokenize(text: string): string[] {
 		out.push(...matches)
 	}
 	return out
+}
+
+/** Query tokens with filler removed. Falls back to the raw tokens if all were filler. */
+export function queryTokens(query: string): string[] {
+	const raw = tokenize(query).filter((t) => t.length > 1)
+	const meaningful = raw.filter((t) => !STOPWORDS.has(t))
+	return meaningful.length > 0 ? meaningful : raw
 }
 
 interface ScoredChunk {
@@ -142,11 +227,11 @@ export function retrieveCode(root: string, query: string, limit = 8): RetrievedC
 		return []
 	}
 
-	const queryTokens = tokenize(query).filter((t) => t.length > 1)
-	if (queryTokens.length === 0) {
+	const tokensForQuery = queryTokens(query)
+	if (tokensForQuery.length === 0) {
 		return []
 	}
-	const querySet = new Set(queryTokens)
+	const querySet = new Set(tokensForQuery)
 
 	// Document frequency per token.
 	const df = new Map<string, number>()
@@ -233,6 +318,14 @@ export function retrieveCode(root: string, query: string, limit = 8): RetrievedC
 			// Python definition boost for symbol queries.
 			if (/^(def |class )/m.test(chunkText)) {
 				score *= 1.4
+			}
+			// Path relevance: a query about CLI commands should favour cli.py over a
+			// file that merely mentions the word. Weighted below the filename-stem
+			// boost so an exact stem hit still wins.
+			const pathLower = rel.toLowerCase()
+			const pathHits = [...querySet].filter((q) => q.length >= 3 && pathLower.includes(q)).length
+			if (pathHits > 0) {
+				score *= 1 + 0.25 * Math.min(pathHits, 3)
 			}
 			if (score > 0.5) {
 				matched.sort((a, b) => b.weight - a.weight)
