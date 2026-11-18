@@ -1,0 +1,22 @@
+{
+  "http500": {
+    "elapsedSeconds": 0,
+    "finishReason": "error",
+    "retryNotes": [],
+    "errors": [
+      "[Model Error] Request failed (500): internal server error from the mock provider",
+      "[Model Error] [Model Error] Request failed (500): internal server error from the mock provider"
+    ],
+    "resultText": "TrueForge error: [Model Error] [Model Error] Request failed (500): internal server error from the mock provider"
+  },
+  "invalidKey401": {
+    "elapsedSeconds": 0,
+    "finishReason": "error",
+    "retryNotes": [],
+    "errors": [
+      "[Model Error] Request failed (401): invalid api key",
+      "[Model Error] [Model Error] Request failed (401): invalid api key"
+    ],
+    "resultText": "TrueForge error: [Model Error] [Model Error] Request failed (401): invalid api key"
+  }
+}

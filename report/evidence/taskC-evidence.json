@@ -1,0 +1,40 @@
+{
+  "unreachable": {
+    "elapsedSeconds": 0,
+    "finishReason": "error",
+    "retryNotes": [
+      "[Forge] badendpoint/dead-model unavailable ([Model Error] Cannot connect to API: bad port); failing over to local-ollama/qwen-coder-local"
+    ],
+    "errors": [
+      "[Model Error] Cannot connect to API: bad port",
+      "[Model Error] Cannot connect to API: connect ECONNREFUSED 127.0.0.1:11434",
+      "[Model Error] [Model Error] Cannot connect to API: connect ECONNREFUSED 127.0.0.1:11434 — all 2 configured models failed (badendpoint/dead-model, local-ollama/qwen-coder-local)."
+    ],
+    "sessionModel": {
+      "name": "local-ollama/qwen-coder-local"
+    },
+    "workspaceStatusUnchanged": true,
+    "workspaceDiffHashUnchanged": true,
+    "resultText": "TrueForge error: [Model Error] [Model Error] Cannot connect to API: connect ECONNREFUSED 127.0.0.1:11434 — all 2 configured models failed (badendpoint/dead-model, local-ollama/qwen-coder-local)."
+  },
+  "cancelDuringRetry": {
+    "msFromAbortToSendReturn": 45,
+    "finishReason": "completed",
+    "workspaceStatusUnchanged": true,
+    "workspaceDiffHashUnchanged": true
+  },
+  "rateLimited": {
+    "elapsedSeconds": 7,
+    "finishReason": "error",
+    "retryNotes": [
+      "[Forge] ratelimited/limited-model failed transiently (attempt 1/2); retrying in 400ms",
+      "[Forge] ratelimited/limited-model failed transiently (attempt 2/2); retrying in 800ms"
+    ],
+    "errors": [
+      "[Model Error] Request failed (429): rate limited by the mock provider",
+      "[Model Error] Request failed (429): rate limited by the mock provider",
+      "[Model Error] Request failed (429): rate limited by the mock provider"
+    ],
+    "resultText": "TrueForge error: [Model Error] [Model Error] Request failed (429): rate limited by the mock provider"
+  }
+}

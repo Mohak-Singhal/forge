@@ -97,9 +97,11 @@ apps/examples/desktop-app/.cursor/settings.json
 
 .forge/
 .relay/
-GATES.md
 
 .forge/
 .relay/
-GATES.md
 .trueforge/models.local.json
+
+# Local audit/tool state (not part of the submission)
+.perch/
+.unlazy/spec/

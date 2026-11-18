@@ -8,7 +8,7 @@ Cline panel visible · terminal font big · screen aspect 16:9 · **you hit reco
 1. Click Cline view → New Task. Editor: helpers.py visible (git diff badge clean).
 2. Type: `Select the function get_debug_flag in helpers.py and treat the values 'off' and 'n' as false as well, case-insensitively, and update the docstring to list every value that is treated as false.`
 3. Cut nothing between instruction and diff. Stream shows AGENT text → tool calls (repo_map → retrieve → read_file → propose_edit).
-4. Approve the hunk (per-hunk Accept). Toast/diff applies in place.
+4. Approve the two hunks (per-hunk Accept: the code change and the docstring). Nothing is written until both review answers are recorded; the tool then applies only the accepted hunks. Toast confirms the applied count.
 5. Verification on screen: terminal — `FLASK_DEBUG=off .venv/bin/python -c "from flask.helpers import get_debug_flag; print(get_debug_flag())"` → prints **False**. Show docstring in the editor pane.
 
 ## Shot 2 — Task B (1:20–3:00)
@@ -18,7 +18,7 @@ Cline panel visible · terminal font big · screen aspect 16:9 · **you hit reco
 3. Approve each proposal: src/flask/cli.py (config command registered in FlaskGroup), tests/test_cli.py (new TestConfig class), docs/cli.rst ("Show the Config"), docs/api.rst (autodata config_command).
 4. TrueForge session visible for this run briefly — ego lite window, already on screen showing the sessions list; click the new flask session; the detail shows TURN=1, model `opencode-free-models/deepseek-v41-flash-free`, TOOL CALLS count, timeline and "Agent steps" (editor_repo_map → editor_retrieve → …). (navigate with: ego-browser → goto `http://localhost:8790/sessions?view=sessions`, `Emulation.setDeviceMetricsOverride {width:1320, height:660, deviceScaleFactor:2}` — the window's webview is a fixed 660×660 so the desktop SPA needs the emulated viewport; leave the window on the session detail for the camera.)
 5. Verification on screen — terminal:
-   - `.venv/bin/python -m pytest tests/test_cli.py -q` → **58 passed**
+   - `.venv/bin/python -m pytest tests/test_cli.py -q` → **58 passed, 3 skipped**
    - `.venv/bin/flask --help | grep -A2 config` → command listed
    - demo app with SECRET_KEY / DB_PASSWORD / API_TOKEN / NORMAL, run `flask config` → sensitive values `***`, NORMAL visible
    - `git diff --stat` → ≥3 files
@@ -26,9 +26,13 @@ Cline panel visible · terminal font big · screen aspect 16:9 · **you hit reco
 ## Shot 3 — Task C (3:00–4:00)
 1. `git stash` (tree is clean now — this is what "no files changed" means here).
 2. Break the endpoint (terminal, shown): `curl -X PUT .../settings/model-providers` base_url → `http://127.0.0.1:9/v1` (or TF Settings → Models).
-3. Repeat the Task A instruction. The chat shows: `[Model Error] Cannot connect to API: bad port` with **Retry** / **Start New Task** — editor responsive, no crash.
+3. Repeat the Task A instruction. The chat shows `[Forge] … unavailable (…); failing over to local-ollama/qwen-coder-local`, then, with no local daemon running, one clear error naming both models. Editor responsive, no crash, cancel still works. (Verified: failover switches the session model; cancel during backoff returned in 45 ms.)
 4. `git status --short` → empty output (shown).
 5. Restore provider; note for the write-up: configured fallback present; clear error is the demonstrated anchor.
+
+## Safety beats worth showing
+- Skip every hunk in the review → the tool refuses (`status: "unreviewed"`) and the file is byte-identical. This is the fail-closed gate; do not cut it.
+- `Forge: Undo Last Edit` after an applied edit restores the exact pre-edit bytes and refuses if the file changed since.
 
 ## Editing notes
 Cut model-wait gaps only; never cut instruction → diff appearing; keep order A → B → C; keep the TF session visible for ≥5s in Task B; total ≤ 4:00.
@@ -40,6 +44,6 @@ Cut model-wait gaps only; never cut instruction → diff appearing; keep order A
 - The dev host window has been EVICTED repeatedly (this automation environment) — if it happens live on camera, relaunch with: /usr/bin/open -na "/Applications/Visual Studio Code.app" --args --extensionDevelopmentPath=…/apps/vscode --user-data-dir=…/vscode-userdata …/forge-demo/flask and continue; exactly the kind of resilience the video should not hide (mention it in the write-up if it happens).
 - Verification commands for the video terminal beats:
   - ``FLASK_DEBUG=off .venv/bin/python -c "from flask.helpers import get_debug_flag; print(get_debug_flag())"`` → False
-  - ``.venv/bin/python -m pytest tests/test_cli.py -q`` → 59 passed, 3 skipped (async extra); full suite: 479 passed, 2 failed (both pre-existing on tag 3.1.3)
+  - ``.venv/bin/python -m pytest tests/test_cli.py -q`` → 58 passed, 3 skipped (baseline on a clean 3.1.3 checkout is 55 passed, 3 skipped); full suite: 2 failures remain, both pre-existing on tag 3.1.3 (async extra, Werkzeug version) and confirmed by the agent via `git stash`
   - ``.venv/bin/flask --help`` → `config` listed under Commands
   - ``.venv/bin/flask --app /private/.../maskdemo.py config`` → SECRET_KEY/PASSWORD/TOKEN/KEY as ***

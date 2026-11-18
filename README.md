@@ -53,7 +53,10 @@ never in this repository.
 
 For the reference development run, we used a custom OpenAI-compatible provider
 (`opencode-free-models`, free gateway) with two models: `deepseek-v41-flash-free`
-(primary) and `jev-113-free` (fallback). Approximate cost: $0.
+(primary) and `qwen-coder-local` (fallback, Ollama `qwen2.5-coder:1.5b` on
+`127.0.0.1:11434`). These are exactly the names in
+[`.trueforge/agents/forge-editor.json`](./.trueforge/agents/forge-editor.json).
+Approximate cost: $0.
 
 ### 2. Load the extension and point it at a workspace
 
@@ -70,8 +73,9 @@ On activation the extension:
    `http://127.0.0.1:8791/mcp`;
 3. loads the agent definition from [`.trueforge/agents/forge-editor.json`](./.trueforge/agents/forge-editor.json)
    — instructions, the primary model, preloaded editor tools, and per-tool approval
-   requirements (`editor_propose_edit` and `editor_run_command` require human approval;
-   nothing touches disk before you accept the hunks in the review UI).
+   requirements (`editor_propose_edit`, `editor_run_command` and
+   `editor_undo_last_edit` require human approval; nothing touches disk before you
+   accept the hunks in the review UI).
 
 Open the Cline view in the Activity Bar, pick **Act**, type a task, and accept or reject
 each proposal inline. The diff preview is per-hunk, exactly as accepted/rejected in chat;
@@ -99,12 +103,42 @@ git clone https://github.com/pallets/flask flask3 && cd flask3 && git checkout 3
 
 ### What changed vs upstream (delta judges evaluate)
 
-19 files changed from the fork point, all committed on `forge`. See
+43 files changed from the fork point, all committed on `forge`. See
 [`docs/adr/0001-fork-cline.md`](./docs/adr/0001-fork-cline.md) for the fork declaration
 and [`GATES.md`](./GATES.md) for the Round 1 verification ledger. In short: the Cline
 agent loop is replaced by TrueForge sessions/turns; editor capabilities are exposed as
 MCP tools to the TrueForge agent; diff review flows through TrueForge tool approval;
 streaming/cancellation flow through the same SDK machinery.
+
+### Safety contract (what the review gate guarantees)
+
+- `editor_propose_edit` never writes without a recorded per-hunk review. If the diff
+  review did not run (or was dismissed), the tool returns `status: "unreviewed"` and
+  the file is untouched — approval in chat means "the agent may apply", not "apply
+  everything".
+- Forge's write tools (`editor_propose_edit`, `editor_undo_last_edit`) are never
+  auto-approved, even when the AutoApproveBar's "Use MCP servers" toggle is on.
+- A review is bound to its tool call: if the user reviews and then rejects the call,
+  the review is discarded, so an identical later proposal cannot inherit it.
+- `editor_undo_last_edit` restores the exact pre-edit bytes and refuses if the file
+  changed after that edit.
+- Cancelling while a tool approval is on screen sends a denial; a cancel during retry
+  backoff is not retried. Cancellation bounds the harness cancel request so a stalled
+  acknowledgement cannot leave a spinner running.
+
+### Verify locally
+
+```bash
+cd apps/vscode
+bunx tsc --noEmit                                  # type check
+bunx vitest run --config vitest.config.ts           # extension unit tests
+node ../../.unlazy/verify/mcp-tools.mjs             # 8 editor tools on 127.0.0.1:8791
+node ../../.unlazy/verify/writeup.mjs               # write-up has the 8 required headings
+node ../../.unlazy/verify/demo-script.mjs           # demo script covers A/B/C
+```
+
+The Flask demo repository must stay on tag `3.1.3` (commit `22d92470`). All judged
+runs start from a clean checkout (`git status` empty).
 
 <p align="center">
   <img src="assets/icons/icon.png" width="80" alt="Cline" />

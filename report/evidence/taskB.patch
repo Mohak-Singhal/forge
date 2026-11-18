@@ -1,0 +1,180 @@
+diff --git a/docs/api.rst b/docs/api.rst
+index 1aa8048f..36ca9fbd 100644
+--- a/docs/api.rst
++++ b/docs/api.rst
+@@ -715,3 +715,5 @@ Command Line Interface
+ .. autodata:: run_command
+ 
+ .. autodata:: shell_command
++
++.. autodata:: config_command
+diff --git a/docs/cli.rst b/docs/cli.rst
+index a72e6d51..17ac88f7 100644
+--- a/docs/cli.rst
++++ b/docs/cli.rst
+@@ -146,6 +146,39 @@ context will be active, and the app instance will be imported. ::
+ Use :meth:`~Flask.shell_context_processor` to add other automatic imports.
+ 
+ 
++Show the Configuration
++----------------------
++
++The :func:`config <cli.config_command>` command prints the loaded application's
++configuration as JSON. This is useful to check which values were actually
++loaded, for example when configuration comes from several sources such as
++``config.py``, environment variables, or instance folders. ::
++
++    $ flask --app hello config
++    {
++      "APPLICATION_ROOT": "/",
++      "DEBUG": false,
++      "SECRET_KEY": "***",
++      "TESTING": false
++    }
++
++Keys are sorted alphabetically and the output is indented so it is easy to
++read and diff.
++
++Values of keys that may contain sensitive information are masked with ``***``.
++A key is masked if its name contains ``SECRET``, ``PASSWORD``, ``TOKEN``, or
++``KEY``, ignoring case. For example ``SECRET_KEY``, ``MAIL_PASSWORD``, and
++``API_TOKEN`` are all masked. This makes it safer to paste the output into an
++issue report or share it with a colleague. Nested dictionaries are checked the
++same way.
++
++.. note::
++
++    Masking is based on key names only, so a custom key that holds a secret
++    but does not contain one of those words is still printed. Review the
++    output before sharing it.
++
++
+ .. _dotenv:
+ 
+ Environment Variables From dotenv
+diff --git a/src/flask/cli.py b/src/flask/cli.py
+index ed11f256..7d106d9e 100644
+--- a/src/flask/cli.py
++++ b/src/flask/cli.py
+@@ -4,6 +4,7 @@ import ast
+ import collections.abc as cabc
+ import importlib.metadata
+ import inspect
++import json
+ import os
+ import platform
+ import re
+@@ -594,6 +595,7 @@ class FlaskGroup(AppGroup):
+             self.add_command(run_command)
+             self.add_command(shell_command)
+             self.add_command(routes_command)
++            self.add_command(config_command)
+ 
+         self._loaded_plugin_commands = False
+ 
+@@ -1115,6 +1117,39 @@ def routes_command(sort: str, all_methods: bool) -> None:
+         click.echo(template.format(*row))
+ 
+ 
++_masked_key_re = re.compile(r"SECRET|PASSWORD|TOKEN|KEY", re.IGNORECASE)
++
++
++def _mask_config_value(value: t.Any) -> t.Any:
++    """Recursively replace values of sensitive-looking keys in nested
++    mappings, sequences, and sets with ``"***"``.
++    """
++    if isinstance(value, cabc.Mapping):
++        return {
++            key: ("***" if _masked_key_re.search(str(key)) else _mask_config_value(val))
++            for key, val in value.items()
++        }
++
++    if isinstance(value, (list, tuple, set, frozenset)):
++        return [_mask_config_value(item) for item in value]
++
++    return value
++
++
++@click.command("config", short_help="Show the config of the app as JSON.")
++@with_appcontext
++def config_command() -> None:
++    """Show the configuration of the loaded application as JSON.
++
++    Values of keys that may hold sensitive information are replaced with a
++    masked value. A key is considered sensitive if it contains SECRET,
++    PASSWORD, TOKEN, or KEY, ignoring case.
++    """
++    config = _mask_config_value(dict(current_app.config))
++    config = dict(sorted(config.items(), key=lambda item: str(item[0])))
++    click.echo(json.dumps(config, indent=2, default=str))
++
++
+ cli = FlaskGroup(
+     name="flask",
+     help="""\
+diff --git a/tests/test_cli.py b/tests/test_cli.py
+index e254c1dd..a48b3149 100644
+--- a/tests/test_cli.py
++++ b/tests/test_cli.py
+@@ -1,6 +1,7 @@
+ # This file was part of Flask-CLI and was modified under the terms of
+ # its Revised BSD License. Copyright © 2015 CERN.
+ import importlib.metadata
++import json
+ import os
+ import platform
+ import ssl
+@@ -518,6 +519,53 @@ class TestRoutes:
+         assert "Host" in result.output
+ 
+ 
++class TestConfig:
++    @pytest.fixture
++    def app(self):
++        app = Flask(__name__)
++        app.config.update(
++            SOME_VALUE=123,
++            SECRET_KEY="hunter2",
++            MAIL_PASSWORD="letmein",
++            API_TOKEN="abc123",
++            SESSION_KEY="nope",
++            stripe_secret_key="lower",
++            NESTED={"DB_PASSWORD": "nested", "PLAIN": 1},
++            NAME="example",
++        )
++        return app
++
++    @pytest.fixture
++    def invoke(self, app, runner):
++        cli = FlaskGroup(create_app=lambda: app)
++        return partial(runner.invoke, cli)
++
++    def test_config(self, invoke):
++        result = invoke(["config"])
++        assert result.exit_code == 0
++        data = json.loads(result.output)
++        assert data["NAME"] == "example"
++        assert data["SOME_VALUE"] == 123
++
++    def test_config_masks_sensitive_values(self, invoke):
++        data = json.loads(invoke(["config"]).output)
++        assert data["SECRET_KEY"] == "***"
++        assert data["MAIL_PASSWORD"] == "***"
++        assert data["API_TOKEN"] == "***"
++        assert data["SESSION_KEY"] == "***"
++        assert data["stripe_secret_key"] == "***"
++        assert data["NESTED"]["DB_PASSWORD"] == "***"
++        assert data["NESTED"]["PLAIN"] == 1
++        assert "hunter2" not in json.dumps(data)
++
++    def test_config_in_help(self, runner):
++        app = Flask(__name__)
++        cli = FlaskGroup(create_app=lambda: app)
++        result = runner.invoke(cli, ["--help"])
++        assert result.exit_code == 0
++        assert "config" in result.output
++
++
+ def dotenv_not_available():
+     try:
+         import dotenv  # noqa: F401
