@@ -32,3 +32,14 @@ Cline panel visible · terminal font big · screen aspect 16:9 · **you hit reco
 
 ## Editing notes
 Cut model-wait gaps only; never cut instruction → diff appearing; keep order A → B → C; keep the TF session visible for ≥5s in Task B; total ≤ 4:00.
+
+## Observed in the full dry run (2026-11-18, one sitting)
+- Task A: ~6 approvals expected (ls/retrieve early, propose_edit, pytest run, matrix verification command). The agent seeds `ls` + `git log` first; it checks its own work and reports the 2 pre-existing failures itself (async extra, test_bad_environ_raises_bad_request) — show this if pace allows; it is a strong signal.
+- Task B: ~8-10 approvals; the agent first reads widely (cli.py in chunks, cli.rst, api.rst, test_cli.py, CHANGES.rst); it proposes cli.py → tests → then **self-corrected a missing `import json`** in a follow-up edit without being asked; two docs proposals come as one message (two Approve buttons — click both); it runs the full suite and proves the 2 failures pre-existing via git stash itself.
+- Task C: relaunch needed between B and C if the window died; Provider base_url → 127.0.0.1:9; the error renders in ~2s.
+- The dev host window has been EVICTED repeatedly (this automation environment) — if it happens live on camera, relaunch with: /usr/bin/open -na "/Applications/Visual Studio Code.app" --args --extensionDevelopmentPath=…/apps/vscode --user-data-dir=…/vscode-userdata …/forge-demo/flask and continue; exactly the kind of resilience the video should not hide (mention it in the write-up if it happens).
+- Verification commands for the video terminal beats:
+  - ``FLASK_DEBUG=off .venv/bin/python -c "from flask.helpers import get_debug_flag; print(get_debug_flag())"`` → False
+  - ``.venv/bin/python -m pytest tests/test_cli.py -q`` → 59 passed, 3 skipped (async extra); full suite: 479 passed, 2 failed (both pre-existing on tag 3.1.3)
+  - ``.venv/bin/flask --help`` → `config` listed under Commands
+  - ``.venv/bin/flask --app /private/.../maskdemo.py config`` → SECRET_KEY/PASSWORD/TOKEN/KEY as ***
