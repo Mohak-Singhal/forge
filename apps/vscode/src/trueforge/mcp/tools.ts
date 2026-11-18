@@ -192,7 +192,7 @@ async function searchText(ctx: WorkspaceContext, args: Record<string, unknown>):
 	return results.length === 0 ? `no matches for /${pattern}/` : results.join("\n")
 }
 
-function walkForSearch(root: string): string[] {
+function walkForSearch(root: string, maxFiles = 5000): string[] {
 	const { readdirSync } = require("node:fs") as typeof import("node:fs")
 	const { join: joinPath } = require("node:path") as typeof import("node:path")
 	const stack = [root]
