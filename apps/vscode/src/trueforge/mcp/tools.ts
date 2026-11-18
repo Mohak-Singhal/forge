@@ -9,11 +9,12 @@
  * shell without explicit user consent.
  */
 
-import { exec } from "node:child_process"
+import { execFile, spawn } from "node:child_process"
 import { constants as fsConstants } from "node:fs"
 import { access, readFile } from "node:fs/promises"
 import { relative, resolve } from "node:path"
 import { applyHunks, type EditHunk, sha256 } from "../edits"
+import { Logger } from "@shared/services/Logger"
 import { buildRepoMap, retrieveCode } from "../retrieval"
 
 export interface EditProposal {
@@ -242,19 +243,39 @@ function runCommand(ctx: WorkspaceContext, args: Record<string, unknown>): Promi
 			throw new Error(`editor_run_command: refused to run potentially destructive/network command: ${banned.trim()}`)
 		}
 	}
+	Logger.log(`[Forge] editor_run_command start: ${command}`)
+	const root = ctx.root.replace(/"/g, '\\"')
+	const wrapped = `cd "${root}" && ${command}`
+	// Use spawn with manual collection (same libuv path diagnostics uses) and a
+	// watchdog, instead of execFile's callback wrapper.
 	return new Promise((resolvePromise) => {
-		exec(command, { cwd: ctx.root, timeout: COMMAND_TIMEOUT_MS, maxBuffer: 8 * 1024 * 1024, shell: "/bin/bash" }, (error, stdout, stderr) => {
+		const child = spawn("/bin/bash", ["-c", wrapped], { stdio: ["ignore", "pipe", "pipe"] })
+		let stdout = ""
+		let stderr = ""
+		const timer = setTimeout(() => {
+			child.kill("SIGKILL")
+		}, COMMAND_TIMEOUT_MS)
+		child.stdout.on("data", (chunk: Buffer) => {
+			if (stdout.length < 8 * 1024 * 1024) stdout += chunk.toString()
+		})
+		child.stderr.on("data", (chunk: Buffer) => {
+			if (stderr.length < 8 * 1024 * 1024) stderr += chunk.toString()
+		})
+		child.on("error", (spawnError) => {
+			clearTimeout(timer)
+			Logger.log(`[Forge] editor_run_command spawn error: ${spawnError.message}`)
+			resolvePromise(`command failed to start: ${spawnError.message}`)
+		})
+		child.on("close", (code, signal) => {
+			clearTimeout(timer)
 			const combined = `${stdout}${stderr ? `\n${stderr}` : ""}`.trim()
 			const tail = combined.length > MAX_OUTPUT_BYTES ? `…[truncated ${combined.length - MAX_OUTPUT_BYTES} bytes]\n${combined.slice(-MAX_OUTPUT_BYTES)}` : combined
-			if (error && !stdout && !stderr) {
-				resolvePromise(`command failed to start or timed out: ${error.message}`)
-				return
-			}
-			const exitCode = typeof (error as { code?: number }).code === "number" ? (error as { code?: number }).code : 0
-			resolvePromise(`exit code: ${exitCode}\n${tail || "(no output)"}`)
+			Logger.log(`[Forge] editor_run_command done: code=${code} signal=${signal} bytes=${combined.length}`)
+			resolvePromise(`exit code: ${code ?? 0}\n${tail || "(no output)"}`)
 		})
 	})
 }
+
 
 export const TOOL_NAMES = [
 	"editor_read_file",

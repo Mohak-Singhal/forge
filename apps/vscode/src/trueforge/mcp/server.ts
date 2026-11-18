@@ -92,12 +92,7 @@ export class ForgeMcpServer {
 					const mcp = buildMcp()
 					const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
 					await mcp.connect(transport)
-					try {
-						await transport.handleRequest(req, res)
-					} finally {
-						await transport.close()
-						await mcp.close()
-					}
+					await transport.handleRequest(req, res)
 				} catch (error) {
 					Logger.error("[Forge] MCP stream error:", error)
 					if (!res.headersSent) {
