@@ -53,7 +53,7 @@ function loadForgeAgentSpec(extensionPath: string): ForgeAgentSpec {
 		try {
 			const raw = readFileSync(candidate, "utf8")
 			const parsed = JSON.parse(raw) as ForgeAgentSpec
-			if (parsed && parsed.model?.name && parsed.instructions) {
+			if (parsed?.model?.name && parsed.instructions) {
 				return parsed
 			}
 		} catch {
@@ -340,7 +340,7 @@ export class TrueForgeSessionHost implements SdkSessionHost {
 							conversationId: sessionId,
 						} as AgentContentEndEvent),
 					)
-				} else if (turn && turn.contentAccumulator.text) {
+				} else if (turn?.contentAccumulator.text) {
 					this.emit(
 						stageEvent(sessionId, {
 							type: "content_end",
@@ -408,14 +408,32 @@ export class TrueForgeSessionHost implements SdkSessionHost {
 			case "turn.done": {
 				const done = event as unknown as { state?: { status?: string; code?: string; message?: string } }
 				const stateKind = done.state?.status ?? "done"
-				if (stateKind === "done" || stateKind === "cancelled" || stateKind === "failed") {
+				if (stateKind === "done" || stateKind === "cancelled" || stateKind === "failed" || stateKind === "error") {
+					const isError = stateKind === "failed" || stateKind === "error"
 					const reason = stateKind === "done" ? "stop" : stateKind === "cancelled" ? "aborted" : "error"
+					const failureMessage = done.state?.message?.trim()
+					const accumulated = turn?.contentAccumulator.text ?? ""
+					// Surface the harness's own failure message when the model call dies
+					// before any text was produced — otherwise the chat renders nothing.
+					const text = accumulated || failureMessage || ""
+					if (isError) {
+						this.emit(
+							stageEvent(sessionId, {
+								type: "error",
+								error: new Error(failureMessage ?? "TrueForge turn failed"),
+								recoverable: false,
+								iteration: turn?.iteration ?? 1,
+								agentId: sessionId,
+								conversationId: sessionId,
+							} as AgentErrorEvent),
+						)
+					}
 					this.emit(
 						stageEvent(sessionId, {
 							type: "done",
 							reason: reason as AgentDoneEvent["reason"],
 							iterations: turn?.iteration ?? 1,
-							text: turn?.contentAccumulator.text ?? "",
+							text,
 							agentId: sessionId,
 							conversationId: sessionId,
 						} as AgentDoneEvent),
@@ -621,6 +639,7 @@ export class TrueForgeSessionHost implements SdkSessionHost {
 	pendingPrompts(action: "update", _input: PendingPromptsUpdateInput): Promise<PendingPromptMutationResult>
 	pendingPrompts(action: "delete", _input: PendingPromptsDeleteInput): Promise<PendingPromptMutationResult>
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	// biome-ignore lint/suspicious/noExplicitAny: single-shape overload fallback for unknown action strings
 	pendingPrompts(action: any, _input: any): any {
 		switch (action) {
 			case "list":
