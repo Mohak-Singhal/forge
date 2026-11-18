@@ -28,6 +28,7 @@ export async function bootForge(context: vscode.ExtensionContext, options: Forge
 	let token = process.env.FORGE_MCP_TOKEN ?? (context.globalState.get<string>("forge.mcpToken"))
 	if (!token) {
 		token = randomBytes(16).toString("hex")
+		// biome-ignore lint/plugin: per-install persisted secret; globalState is the VS Code API for this (cf. state-migrations.ts) while CacheService holds session state
 		await context.globalState.update("forge.mcpToken", token)
 	}
 	process.env.FORGE_MCP_TOKEN = token
@@ -52,6 +53,7 @@ export async function bootForge(context: vscode.ExtensionContext, options: Forge
 				auth: { type: "header", headers: { "x-forge-token": token } },
 			},
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		// biome-ignore lint/suspicious/noExplicitAny: TrueForge SDK surfaces untyped agent/session shapes
 		} as any)
 		Logger.log("[Forge] vscode-editor-tools connector upserted in TrueForge")
 	} catch (error) {

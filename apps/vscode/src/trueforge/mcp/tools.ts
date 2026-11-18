@@ -9,7 +9,7 @@
  * shell without explicit user consent.
  */
 
-import { execFile, spawn } from "node:child_process"
+import { spawn } from "node:child_process"
 import { constants as fsConstants } from "node:fs"
 import { access, readFile } from "node:fs/promises"
 import { relative, resolve } from "node:path"
@@ -162,7 +162,7 @@ async function searchText(ctx: WorkspaceContext, args: Record<string, unknown>):
 	}
 	const limit = typeof input.limit === "number" ? Math.min(Math.max(1, input.limit), 200) : 50
 	const regex = new RegExp(pattern, "im")
-	const files = walkForSearch(ctx.root, 3000)
+	const files = walkForSearch(ctx.root)
 	const results: string[] = []
 	for (const file of files) {
 		if (results.length >= limit) {
@@ -192,8 +192,8 @@ async function searchText(ctx: WorkspaceContext, args: Record<string, unknown>):
 	return results.length === 0 ? `no matches for /${pattern}/` : results.join("\n")
 }
 
-function walkForSearch(root: string, maxFiles: number): string[] {
-	const { readdirSync, statSync } = require("node:fs") as typeof import("node:fs")
+function walkForSearch(root: string): string[] {
+	const { readdirSync } = require("node:fs") as typeof import("node:fs")
 	const { join: joinPath } = require("node:path") as typeof import("node:path")
 	const stack = [root]
 	const files: string[] = []
@@ -326,7 +326,7 @@ export async function callEditorTool(name: string, rawArgs: Record<string, unkno
 			}
 			const abs = resolve(realpathSyncSafe(ctx.root), path)
 			const { execFile } = await import("node:child_process")
-			const pyFiles = abs.endsWith(".py") ? [abs] : walkForSearch(ctx.root, 10000).filter(f => f.endsWith(".py")).slice(0, 20)
+			const pyFiles = abs.endsWith(".py") ? [abs] : walkForSearch(ctx.root).filter(f => f.endsWith(".py")).slice(0, 20)
 			const errors: string[] = []
 			for (const file of pyFiles) {
 				const rel = relative(realpathSyncSafe(ctx.root), file).split("\\").join("/")

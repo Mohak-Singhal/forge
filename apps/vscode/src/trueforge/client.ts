@@ -29,6 +29,7 @@ export class TrueForgeClient {
 		const result = await this.sdk.sessions.create({
 			agent: { spec },
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		// biome-ignore lint/suspicious/noExplicitAny: TrueForge SDK surfaces untyped agent/session shapes
 		} as any)
 		const id = (result as unknown as { data?: { id?: string } }).data?.id
 		if (!id) {
@@ -39,13 +40,14 @@ export class TrueForgeClient {
 
 	/** Stream events from a turn; caller iterates with for await. */
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	async *streamTurn(sessionId: string, prompt: string): AsyncGenerator<any, void, unknown> {
+	async *streamTurn(sessionId: string, prompt: string): AsyncGenerator<unknown, void, unknown> {
 		const stream = await this.sdk.sessions.createTurnStream(sessionId, {
 			input: [{ type: "user.message", content: prompt }],
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		// biome-ignore lint/suspicious/noExplicitAny: TrueForge SDK surfaces untyped agent/session shapes
 		} as any)
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		for await (const event of stream as AsyncIterable<any>) {
+		for await (const event of stream as AsyncIterable<unknown>) {
 			yield event
 		}
 	}
@@ -55,9 +57,10 @@ export class TrueForgeClient {
 		const stream = await this.sdk.sessions.createTurnStream(sessionId, {
 			input: [{ type: "user.message", content: prompt }],
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		// biome-ignore lint/suspicious/noExplicitAny: TrueForge SDK surfaces untyped agent/session shapes
 		} as any)
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		for await (const _event of stream as AsyncIterable<any>) {
+		for await (const _event of stream as AsyncIterable<unknown>) {
 			// drain
 		}
 	}
@@ -85,6 +88,7 @@ export class TrueForgeClient {
 				},
 			],
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		// biome-ignore lint/suspicious/noExplicitAny: TrueForge SDK surfaces untyped agent/session shapes
 		} as any)
 	}
 
