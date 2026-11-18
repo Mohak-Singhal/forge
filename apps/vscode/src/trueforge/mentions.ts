@@ -32,7 +32,10 @@ export interface ParsedMentions {
 export function parseMentions(prompt: string): ParsedMentions {
 	const files: string[] = []
 	const symbols: string[] = []
-	const mentionPattern = /(^|\s)@([A-Za-z0-9_./-]+)/g
+	// The token allows `:` so a line range (`@cli.py:40-80`) stays attached to the
+	// path. A trailing colon from prose (`@cli.py: then`) is stripped below, so this
+	// does not swallow sentence punctuation.
+	const mentionPattern = /(^|\s)@([A-Za-z0-9_./:-]+)/g
 	const text = prompt.replace(mentionPattern, (match, lead: string, token: string) => {
 		const cleaned = token.replace(/[.,;:)\]]+$/, "")
 		if (!cleaned) {
@@ -40,9 +43,10 @@ export function parseMentions(prompt: string): ParsedMentions {
 		}
 		const looksLikePath = cleaned.includes("/") || cleaned.includes("\\") || /\.[A-Za-z0-9]{1,8}(:\d+(-\d+)?)?$/.test(cleaned)
 		if (looksLikePath) {
-			const withoutRange = cleaned.replace(/:\d+(-\d+)?$/, "")
-			if (!files.includes(withoutRange)) {
-				files.push(withoutRange)
+			// Keep the range: `@cli.py:40-80` must resolve to those lines, not the whole
+			// file. `parseMentionRange` splits it back out at resolution time.
+			if (!files.includes(cleaned)) {
+				files.push(cleaned)
 			}
 		} else if (!symbols.includes(cleaned)) {
 			symbols.push(cleaned)

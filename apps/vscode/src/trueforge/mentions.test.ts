@@ -19,9 +19,15 @@ describe("parseMentions", () => {
 		expect(parsed.files).toEqual(["cli.py"])
 	})
 
-	test("strips a line range from the path", () => {
+	test("keeps a line range on the path so it can be resolved", () => {
 		const parsed = parseMentions("see @tests/test_cli.py:40-80 for the pattern")
-		expect(parsed.files).toEqual(["tests/test_cli.py"])
+		expect(parsed.files).toEqual(["tests/test_cli.py:40-80"])
+		// The range survives parsing, so resolution can slice exactly those lines.
+		expect(parseMentionRange(parsed.files[0]!)).toEqual({
+			path: "tests/test_cli.py",
+			startLine: 40,
+			endLine: 80,
+		})
 	})
 
 	test("mixes files and symbols, preserving order", () => {
