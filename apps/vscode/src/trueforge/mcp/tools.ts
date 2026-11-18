@@ -16,7 +16,7 @@ import { relative, resolve } from "node:path"
 import { Logger } from "@shared/services/Logger"
 import { estimateTokens, formatPackedContext, packContext } from "../context-budget"
 import { applyHunks, type EditHunk, sha256 } from "../edits"
-import { proposalKey, takeHunkDecisions } from "../hunk-review"
+import { isUnreviewedWriteAllowed, proposalKey, takeHunkDecisions } from "../hunk-review"
 import { formatMentionContext, parseMentionRange, parseMentions, resolveFileMention } from "../mentions"
 import { buildRepoMap, retrieveCode } from "../retrieval"
 
@@ -268,8 +268,22 @@ async function undoLastEdit(ctx: WorkspaceContext, args: Record<string, unknown>
 	if (!abs.startsWith(root)) {
 		return JSON.stringify({ status: "error", message: `proposal path escapes workspace: ${snap.path}` })
 	}
+	// Refuse to clobber a file that changed after our write: undo means "put my edit
+	// back", not "discard everything written since". The caller can force it only by
+	// re-proposing; nothing here silently overwrites a newer user edit.
+	const current = readFileSyncSafe(abs)
+	if (sha256(current) !== sha256(snap.after)) {
+		return JSON.stringify({
+			status: "stale",
+			path: snap.path,
+			proposalId: id,
+			message: "the file changed after this edit was applied; refusing to overwrite the newer content",
+		})
+	}
 	const { writeFile } = await import("node:fs/promises")
 	await writeFile(abs, snap.before, "utf8")
+	// The undo itself is undoable only by re-proposing; drop the snapshot so it cannot
+	// be applied twice over unrelated later edits.
 	undoSnapshots.delete(id)
 	return JSON.stringify({ status: "undone", path: snap.path, proposalId: id, bytes: snap.before.length })
 }
@@ -534,7 +548,28 @@ export async function callEditorTool(name: string, rawArgs: Record<string, unkno
 			const before = readFileSyncSafe(resolve(realpathSyncSafe(ctx.root), proposal.path))
 			// Per-hunk decisions recorded by the review UI. When the user reviewed the
 			// diff and rejected some hunks, only the accepted ones are applied.
-			const accepted = takeHunkDecisions(proposalKey(proposal.path, proposal.hunks), proposal.hunks.length)
+			//
+			// Fail closed: approval in the chat means "the agent may apply", not "apply
+			// everything". If no review was recorded, the diff the user was shown never
+			// produced a decision, so writing would be a silent write. Refuse instead and
+			// tell the agent to re-propose. The only exception is the explicit headless
+			// seam used by automated tests, which the extension never enables.
+			const decision = takeHunkDecisions(proposalKey(proposal.path, proposal.hunks), proposal.hunks.length)
+			let accepted: boolean[]
+			if (decision.kind === "reviewed") {
+				accepted = decision.accepted
+			} else if (isUnreviewedWriteAllowed()) {
+				accepted = proposal.hunks.map(() => true)
+			} else {
+				Logger.warn(`[Forge] refusing unreviewed edit to ${proposal.path}: ${decision.reason}`)
+				return JSON.stringify({
+					status: "unreviewed",
+					path: proposal.path,
+					applied: 0,
+					rejected: [],
+					message: `No hunk review was recorded for this proposal (${decision.reason}). Nothing was written. Re-propose the edit so the user can review the diff.`,
+				})
+			}
 			const hunksToApply = proposal.hunks.filter((_, index) => accepted[index])
 			const declinedHunks = accepted.filter((wasAccepted) => !wasAccepted).length
 			if (hunksToApply.length === 0) {

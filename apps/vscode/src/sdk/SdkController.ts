@@ -60,6 +60,7 @@ import { ShowMessageRequest, ShowMessageType } from "@/shared/proto/host/window"
 import { Logger } from "@/shared/services/Logger"
 import { resolveDataDirFromEnv } from "@/shared/storage/storage-context"
 import { isClineManagedProvider } from "@/shared/utils/cline"
+import { clearHunkDecisionForToolCall } from "@/trueforge/hunk-review"
 import { arePathsEqual, getDesktopDir } from "@/utils/path"
 import { ClineAccountService } from "./account-service"
 import { AuthService, LogoutReason } from "./auth-service"
@@ -411,7 +412,12 @@ export class Controller {
 			// per-hunk keep/skip); Cline's native `editor`/`apply_patch` keep the existing
 			// coordinator path. Forge review returning undefined falls through.
 			onToolApprovalAsk: async (request) => {
-				const reviewed = await reviewForgeProposal(request.toolName, request.input, await this.getWorkspaceRoot())
+				const reviewed = await reviewForgeProposal(
+					request.toolName,
+					request.input,
+					await this.getWorkspaceRoot(),
+					request.toolCallId,
+				)
 				if (reviewed) {
 					return
 				}
@@ -421,8 +427,10 @@ export class Controller {
 				this.messageTranslatorState.recordApprovedToolMessageTs(toolCallId, messageTs),
 			recordDeniedToolApproval: (toolCallId, toolName, reason) => {
 				this.messageTranslatorState.recordDeniedToolApproval(toolCallId, toolName, reason)
-				// A denied edit's executor never runs, so close its diff preview here. Covers
-				// manual Reject and clearPending (task cancel/abort) in one place.
+				// A denied edit's executor never runs, so its diff preview and its per-hunk
+				// review are both discarded here. Without the review cleanup a later proposal
+				// of the same shape could consume the answers collected for this rejected call.
+				clearHunkDecisionForToolCall(toolCallId)
 				void this.diffEdits.discardPreview(toolCallId)
 			},
 			shouldAutoApproveTool: (request) => {

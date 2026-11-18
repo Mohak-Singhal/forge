@@ -46,6 +46,15 @@ export function buildToolPolicies(
  * an SDK session was created before the toggle changed.
  */
 export function isToolAutoApproved(toolName: string, settings: AutoApprovalSettings): boolean {
+	// Forge's write tools are never auto-approved, whatever the MCP toggle says.
+	// `editor_propose_edit` is the only path that writes to disk, and its whole
+	// contract is a per-hunk diff review before the write. Auto-approving it would
+	// skip the review entirely and turn "approve the tool call" into "apply every
+	// hunk unseen". The MCP toggle governs Forge's read tools; it must not govern
+	// the write ones.
+	if (isForgeWriteTool(toolName)) {
+		return false
+	}
 	if (isReadTool(toolName)) {
 		return !!settings.actions.readFiles
 	}
@@ -83,6 +92,15 @@ function isCommandTool(toolName: string): boolean {
 
 function isBrowserTool(toolName: string): boolean {
 	return toolName === "fetch_web_content" || toolName === "web_fetch" || toolName === "web_search"
+}
+
+/**
+ * Forge editor tools that mutate the workspace. These require an explicit per-call
+ * approval so the diff review always runs first.
+ */
+export function isForgeWriteTool(toolName: string): boolean {
+	const base = toolName.includes("__") ? toolName.slice(toolName.lastIndexOf("__") + 2) : toolName
+	return base === "editor_propose_edit" || base === "editor_undo_last_edit"
 }
 
 /** MCP tools are registered by `createMcpTools` under `serverName__toolName`. */

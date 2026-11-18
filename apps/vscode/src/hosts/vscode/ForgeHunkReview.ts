@@ -18,7 +18,7 @@ import { resolve } from "node:path"
 import * as vscode from "vscode"
 import { Logger } from "@/shared/services/Logger"
 import { applyHunks, type EditHunk } from "@/trueforge/edits"
-import { proposalKey, recordHunkDecisions } from "@/trueforge/hunk-review"
+import { clearHunkDecision, proposalKey, recordHunkDecisions } from "@/trueforge/hunk-review"
 import { EDIT_PREVIEW_URI_SCHEME, editPreviewContentProvider } from "./VscodeEditPreview"
 
 let previewCounter = 0
@@ -78,11 +78,16 @@ export function isForgeEditTool(toolName: string): boolean {
  * Open the diff for a proposed edit and collect per-hunk decisions. Returns undefined
  * when the review could not be shown (missing file, nothing to diff) so the caller
  * falls back to the plain approval the harness already asked for.
+ *
+ * The decisions are bound to `toolCallId` so a denied approval can drop exactly the
+ * review it produced; a review from an earlier, rejected call must never be consumed
+ * by a later proposal of the same shape.
  */
 export async function reviewForgeProposal(
 	toolName: string,
 	input: unknown,
 	cwd: string,
+	toolCallId?: string,
 ): Promise<{ accepted: boolean[] } | undefined> {
 	if (!isForgeEditTool(toolName)) {
 		return undefined
@@ -95,6 +100,11 @@ export async function reviewForgeProposal(
 	if (hunks.length === 0) {
 		return undefined
 	}
+
+	const key = proposalKey(proposal.path, hunks)
+	// Any review already recorded for this exact proposal belongs to an earlier call.
+	// If this review cannot complete, the earlier answers must not be reused for it.
+	clearHunkDecision(key)
 
 	const absolutePath = resolve(cwd, proposal.path)
 	let original = ""
@@ -109,7 +119,6 @@ export async function reviewForgeProposal(
 	// preview we still want a diff when some hunks are stale, so apply what we can and
 	// note the rest — showing nothing would look like the agent proposed no change.
 	const proposed = result.proposed ?? applyBestEffort(original, hunks)
-	const key = proposalKey(proposal.path, hunks)
 	const summary = typeof proposal.summary === "string" ? proposal.summary : "proposed change"
 
 	const previewId = previewCounter++
@@ -152,7 +161,7 @@ export async function reviewForgeProposal(
 			accepted.push(choice === "Keep Hunk")
 		}
 		// Hand the decisions to the MCP tool, which runs after the harness approval.
-		recordHunkDecisions(key, accepted)
+		recordHunkDecisions(key, accepted, toolCallId)
 		const kept = accepted.filter(Boolean).length
 		if (kept === 0) {
 			void vscode.window.showWarningMessage("Forge: you skipped every hunk. Reject the edit in the chat to stop it.")
