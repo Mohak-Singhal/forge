@@ -1,8 +1,10 @@
 # Forge — Round 1 demo script (≤ 4:00, Tasks A → B → C, on-screen verification, TF session in Task B)
 
 Pre-flight (not recorded): flask checkout at tag 3.1.3 is PRISTINE (`git status` empty) ·
-TrueForge up on localhost:8790 (provider = working gateway) · dev host window open on the flask folder ·
-Cline panel visible · terminal font big · screen aspect 16:9 · **you hit record now**.
+TrueForge up on localhost:8790 (provider = working gateway) · fallback answering: `ollama serve`
+with `qwen2.5-coder:1.5b` pulled (check: `node .unlazy/verify/smoke-models.mjs` → SMOKE_OK) ·
+dev host window open on the flask folder · Cline panel visible · terminal font big ·
+screen aspect 16:9 · **you hit record now**.
 
 ## Shot 1 — Task A (0:00–1:20)
 1. Click Cline view → New Task. Editor: helpers.py visible (git diff badge clean).
@@ -26,13 +28,15 @@ Cline panel visible · terminal font big · screen aspect 16:9 · **you hit reco
 ## Shot 3 — Task C (3:00–4:00)
 1. `git stash` (tree is clean now — this is what "no files changed" means here).
 2. Break the endpoint (terminal, shown): `curl -X PUT .../settings/model-providers` base_url → `http://127.0.0.1:9/v1` (or TF Settings → Models).
-3. Repeat the Task A instruction. The chat shows `[Forge] … unavailable (…); failing over to local-ollama/qwen-coder-local`, then, with no local daemon running, one clear error naming both models. Editor responsive, no crash, cancel still works. (Verified: failover switches the session model; cancel during backoff returned in 45 ms.)
+3. Repeat the Task A instruction. The chat shows `[Forge] … unavailable (…); failing over to local-ollama/qwen-coder-local` and the turn continues on the real second model instead of erroring. Point at the TrueForge session detail: its model is now `local-ollama/qwen-coder-local`. (Verified 2026-11-19: 4.2 s, session model switched, real `pong` answer, workspace untouched.)
+   Optional second beat if time allows: stop Ollama (`pkill ollama`) and repeat → one clear error naming **both** models, editor responsive, cancel still works (cancel during backoff returned in 45 ms).
 4. `git status --short` → empty output (shown).
 5. Restore provider; note for the write-up: configured fallback present; clear error is the demonstrated anchor.
 
 ## Safety beats worth showing
 - Skip every hunk in the review → the tool refuses (`status: "unreviewed"`) and the file is byte-identical. This is the fail-closed gate; do not cut it.
-- `Forge: Undo Last Edit` after an applied edit restores the exact pre-edit bytes and refuses if the file changed since.
+- `Forge: Undo Last Edit` after an applied edit restores the exact pre-edit bytes and refuses if the file changed since. Click the file's own tab first: `cmd+alt+z` needs editor focus (with the diff tab focused it does nothing, by design).
+- Pressing `cmd+alt+k` while a Forge diff tab is active is now refused with a warning; that is the guard, not a failure.
 
 ## Editing notes
 Cut model-wait gaps only; never cut instruction → diff appearing; keep order A → B → C; keep the TF session visible for ≥5s in Task B; total ≤ 4:00.

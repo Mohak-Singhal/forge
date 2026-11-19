@@ -1,0 +1,17 @@
+{
+  "elapsedMs": 4218,
+  "finishReason": "completed",
+  "text": "pong",
+  "failoverNotes": [
+    "[Forge] badendpoint/dead-model unavailable ([Model Error] Cannot connect to API: bad port); failing over to local-ollama/qwen-coder-local"
+  ],
+  "errors": [
+    "[Model Error] Cannot connect to API: bad port"
+  ],
+  "sessionModel": {
+    "name": "local-ollama/qwen-coder-local"
+  },
+  "modelSwitchedToFallback": true,
+  "workspaceUnchanged": true,
+  "workspaceStatus": ""
+}
