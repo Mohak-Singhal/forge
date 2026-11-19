@@ -19,16 +19,14 @@ from real measured results, never from invented ones.
   CHECK: node .unlazy/verify/trueforge-up.mjs
   EXPECT: TRUEFORGE_UP  (2026-11-18)
 
-- [ ] G3: Two OpenAI-compatible models are configured in TrueForge and both answer a smoke turn
-  STATUS: configured (deepseek-v41-flash-free primary, qwen-coder-local fallback) but the
-  fallback fails at 2026-11-19 because no Ollama daemon is running on 127.0.0.1:11434.
-  The agent path and failover are still verified; the local model itself is not answering.
+- [x] G3: Two OpenAI-compatible models are configured in TrueForge and both answer a smoke turn
+  STATUS: both answer as of 2026-11-19 06:05 after starting `ollama serve`; model qwen2.5-coder:1.5b present locally.
   CHECK: node .unlazy/verify/smoke-models.mjs
-  EXPECT: SMOKE_OK
+  EXPECT: SMOKE_OK  (2 models answered: opencode-free-models/deepseek-v41-flash-free, local-ollama/qwen-coder-local)
 
-- [ ] G4: The extension compiles/builds cleanly from this repo
+- [x] G4: The extension compiles/builds cleanly from this repo
   CHECK: node .unlazy/verify/build.mjs
-  EXPECT: BUILD_OK
+  EXPECT: BUILD_OK  (2026-11-19 06:20: BUILD_OK extension.js=26274500B webview=ok)
 
 - [x] G5: The extension's loopback MCP server exposes the editor_* tools and they pass unit tests
   CHECK: node .unlazy/verify/mcp-tools.mjs
@@ -106,3 +104,15 @@ from real measured results, never from invented ones.
 - Verification: 1680 vitest tests pass (116 files), 1244 bun unit tests pass, `tsc --noEmit` clean, production `bun run package` BUILD_OK (extension.js 26,273,802 B).
 - E2E Task B through the real host + TF + MCP: session 01m7rch35ycca17sbrh2x13v3h, 49 approvals, 4 files +118 lines, pytest 58 passed/3 skipped, `flask --help` lists config, masked JSON verified.
 - Remaining: no video; GitHub push and portal submission out of scope; the VS Code diff-tab UI itself still needs one on-camera rehearsal.
+
+## 2026-11-19 recording-readiness session — real UI verification
+- Real VS Code dev host (Extension Development Host, PID 61223) drove Task A through the actual editor UI: Quick Open -> `helpers.py`, Ctrl+G to line 28, select `get_debug_flag`, `cmd+alt+k`, submit the exact competition instruction. A real `vscode.diff` tab opened (`Forge inline edit: src/flask/helpers.py (N hunks)`) with a per-hunk modal.
+- Per-hunk independence proved on a 2-hunk proposal: accepted Hunk 1/2 (FLASK_DEBUG false-set), rejected Hunk 2/2 (docstring reword); only hunk 1 landed. Reject path on a 1-hunk proposal left the file byte-identical (sha256 unchanged) and `git status` empty.
+- Undo: `cmd+alt+z` (with the file's own tab focused) and the Command Palette both restored the exact original sha256 `ac96607b...`; `git status` clean after every cycle. First `cmd+alt+z` attempt did nothing because the diff tab was focused — operator note for the demo: click the file tab first.
+- Cancellation consistency: modal Cancel and Escape in the instruction box both left no write and no new tab; file sha256 unchanged, tree clean.
+- Ollama started (`ollama serve`, qwen2.5-coder:1.5b); `smoke-models.mjs` -> SMOKE_OK for both models.
+- Live failover: temporary `badendpoint/dead-model` (127.0.0.1:9) as primary, local-ollama fallback -> failover note naming both models, session model switched to `local-ollama/qwen-coder-local`, real answer `pong`, workspace unchanged, temp provider deleted, both original providers restored, agent spec byte-identical.
+- NEW DEFECT 1 (fixed): inline edit trusted `window.activeTextEditor`; with a `cline-edit-preview` diff tab active it captured the preview text/path, so the model reasoned about non-file content. Reproduced on camera in the dev host.
+- NEW DEFECT 2 (fixed): request content was captured before the model call and applied after review with no drift check, so a mid-turn edit could be overwritten.
+- Fix: pure `inlineEditDocumentRejection` + `hasDocumentDrifted` guards (checked before the prompt and before writing), 7 new unit tests, commit bda6404. Live re-check: untitled buffer refused with a warning before the input box; active Forge diff tab refused with "this is a diff or preview tab, not a file"; normal accept path still applied, then undo restored exact bytes.
+- Verification: 1687 vitest tests pass (116 files), 1244 bun unit tests pass, `tsc --noEmit -p apps/vscode` clean, biome clean, G4 BUILD_OK. Flask demo repo pristine at 22d92470.
