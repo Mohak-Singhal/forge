@@ -118,3 +118,20 @@ describe("formatPackedContext", () => {
 		expect(text).toContain("BM25 9.00")
 	})
 })
+
+describe("report header and link notes", () => {
+	test("leads the report with the query/intent header", () => {
+		const packed = packContext([{ path: "a.py", startLine: 1, endLine: 2, score: 1, text: "x", matchedTerms: ["x"] }], {
+			header: 'query: "add a command" · intent: tests+docs',
+		})
+		expect(packed.report.split("\n")[0]).toBe('query: "add a command" · intent: tests+docs')
+	})
+
+	test("keeps the symbol-link note in the chunk reason", () => {
+		const packed = packContext(
+			[{ path: "docs/cli.rst", startLine: 1, endLine: 2, score: 1, text: "x", why: "links to FlaskGroup, run_command" }],
+			{},
+		)
+		expect(packed.chunks[0]?.reason).toContain("links to FlaskGroup, run_command")
+	})
+})

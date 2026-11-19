@@ -31,6 +31,37 @@ export function sha256(text: string): string {
 	return createHash("sha256").update(text, "utf8").digest("hex")
 }
 
+/**
+ * Occurrences of `needle` that do not cut an identifier in half.
+ *
+ * A plain `indexOf` match turns `VALUE = 1` into a match inside `VALUE = 10`, and
+ * `return val` into a match inside `return value`. Models copy exact text, but a stale
+ * base or a sloppy hunk would then edit the wrong token. A match is safe when it does
+ * not start or end in the middle of an identifier; punctuation boundaries (`(`, `,`,
+ * `"`) stay allowed so partial-expression hunks still work.
+ */
+function safeOccurrences(haystack: string, needle: string): number[] {
+	const found: number[] = []
+	const startsIdent = /[A-Za-z0-9_]/.test(needle[0] ?? "")
+	const endsIdent = /[A-Za-z0-9_]/.test(needle[needle.length - 1] ?? "")
+	let from = 0
+	while (from <= haystack.length) {
+		const index = haystack.indexOf(needle, from)
+		if (index === -1) {
+			break
+		}
+		const before = index > 0 ? haystack[index - 1] : ""
+		const after = index + needle.length < haystack.length ? haystack[index + needle.length] : ""
+		const cutsLeft = startsIdent && /[A-Za-z0-9_]/.test(before)
+		const cutsRight = endsIdent && /[A-Za-z0-9_]/.test(after)
+		if (!cutsLeft && !cutsRight) {
+			found.push(index)
+		}
+		from = index + 1
+	}
+	return found
+}
+
 export function applyHunks(original: string, hunks: EditHunk[]): ApplyResult {
 	let current = original
 	let applied = 0
@@ -47,16 +78,16 @@ export function applyHunks(original: string, hunks: EditHunk[]): ApplyResult {
 			applied++
 			continue
 		}
-		const first = current.indexOf(hunk.oldText)
-		if (first === -1) {
+		const occurrences = safeOccurrences(current, hunk.oldText)
+		if (occurrences.length === 0) {
 			rejected.push({ hunk: index, reason: "old_text not found (stale base?)" })
 			continue
 		}
-		const second = current.indexOf(hunk.oldText, first + 1)
-		if (second !== -1) {
+		if (occurrences.length > 1) {
 			rejected.push({ hunk: index, reason: "old_text occurs multiple times; refusing to guess" })
 			continue
 		}
+		const first = occurrences[0]
 		current = current.slice(0, first) + hunk.newText + current.slice(first + hunk.oldText.length)
 		applied++
 	}

@@ -22,6 +22,11 @@ export interface ContextCandidate {
 	text: string
 	/** Query terms this chunk actually contains, strongest first. */
 	matchedTerms?: string[]
+	/**
+	 * Factual note about why this chunk was added beyond BM25 (for example
+	 * "links to FlaskGroup"). Shown in the agent-visible reason line.
+	 */
+	why?: string
 }
 
 export interface ContextBudgetOptions {
@@ -31,6 +36,10 @@ export interface ContextBudgetOptions {
 	maxChunks?: number
 	/** A single chunk larger than this is truncated rather than dropped. */
 	maxChunkTokens?: number
+	/** Extra first line for the report (e.g. the query and detected intent). */
+	header?: string
+	/** Candidates the selector ranked before it chose these chunks (for honest reporting). */
+	selectedFrom?: number
 }
 
 export interface PackedChunk {
@@ -100,6 +109,9 @@ export function truncateToTokens(text: string, maxTokens: number): { text: strin
 
 function describeReason(candidate: ContextCandidate, tokens: number, truncated: boolean): string {
 	const parts: string[] = []
+	if (candidate.why) {
+		parts.push(candidate.why)
+	}
 	const terms = (candidate.matchedTerms ?? []).filter(Boolean).slice(0, 4)
 	if (terms.length > 0) {
 		parts.push(`matches ${terms.map((t) => `"${t}"`).join(", ")}`)
@@ -204,9 +216,14 @@ export function packContext(candidates: ContextCandidate[], options: ContextBudg
 		})
 	}
 
-	const reportLines = [
-		`retrieval budget: ${used}/${budgetTokens} tokens across ${chunks.length} chunk(s) from ${ranked.length} candidate(s)`,
-	]
+	const reportLines: string[] = []
+	if (options.header) {
+		reportLines.push(options.header)
+	}
+	const source = options.selectedFrom ?? ranked.length
+	reportLines.push(
+		`retrieval budget: ${used}/${budgetTokens} tokens across ${chunks.length} chunk(s), selected from ${source} candidate(s)`,
+	)
 	if (dropped.length > 0) {
 		reportLines.push(`dropped ${dropped.length} candidate(s) to stay inside the budget:`)
 		for (const item of dropped.slice(0, 6)) {

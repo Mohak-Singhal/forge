@@ -18,7 +18,7 @@ import { estimateTokens, formatPackedContext, packContext } from "../context-bud
 import { applyHunks, type EditHunk, sha256 } from "../edits"
 import { isUnreviewedWriteAllowed, proposalKey, takeHunkDecisions } from "../hunk-review"
 import { formatMentionContext, parseMentionRange, parseMentions, resolveFileMention } from "../mentions"
-import { buildRepoMap, retrieveCode } from "../retrieval"
+import { buildRepoMap, retrieveContext } from "../retrieval"
 
 export interface EditProposal {
 	id: string
@@ -519,22 +519,32 @@ export async function callEditorTool(name: string, rawArgs: Record<string, unkno
 			return buildRepoMap(ctx.root)
 		case "editor_retrieve": {
 			const query = typeof rawArgs.query === "string" ? rawArgs.query : ""
-			const limit = typeof rawArgs.limit === "number" ? Math.min(Math.max(1, rawArgs.limit), 12) : 6
+			const limit = typeof rawArgs.limit === "number" ? Math.min(Math.max(1, rawArgs.limit), 12) : 8
 			const budgetTokens =
 				typeof rawArgs.budget_tokens === "number" ? Math.min(Math.max(256, rawArgs.budget_tokens), 16000) : undefined
-			// Rank cheaply first, then pack into a fixed budget. The ranker returns more
-			// candidates than we can afford so eviction decisions are visible in the report.
-			const hits = retrieveCode(ctx.root, query, Math.max(limit, 12))
+			// Rank, add symbol-linked test/doc candidates, then pack into the fixed budget.
+			// The plan returns more candidates than the budget can hold, so eviction
+			// decisions stay visible in the report the agent reads.
+			const plan = retrieveContext(ctx.root, query, { maxChunks: limit })
+			const intent = [plan.intent.tests ? "tests" : "", plan.intent.docs ? "docs" : ""].filter(Boolean).join("+")
 			const packed = packContext(
-				hits.map((hit) => ({
+				plan.chunks.map((hit) => ({
 					path: hit.path,
 					startLine: hit.startLine,
 					endLine: hit.endLine,
 					score: hit.score,
 					text: hit.text,
 					matchedTerms: hit.matchedTerms,
+					why: hit.why,
 				})),
-				{ budgetTokens, maxChunks: limit },
+				{
+					budgetTokens,
+					maxChunks: limit,
+					header: `query: "${query.length > 200 ? `${query.slice(0, 200).trimEnd()}…` : query}"${
+						intent ? ` · intent: ${intent}` : ""
+					}`,
+					selectedFrom: plan.considered,
+				},
 			)
 			return formatPackedContext(packed)
 		}
