@@ -3,7 +3,9 @@ import {
 	applyAcceptedHunks,
 	buildInlineEditPrompt,
 	extractJsonObject,
+	hasDocumentDrifted,
 	type InlineEditRequest,
+	inlineEditDocumentRejection,
 	parseInlineEditReply,
 	planInlineEdit,
 	selectedRegion,
@@ -144,5 +146,46 @@ describe("applyAcceptedHunks", () => {
 		expect(result.applied).toBe(2)
 		expect(result.content).toContain("-> bool:")
 		expect(result.content).toContain("'FLASK_DEBUG', ''")
+	})
+})
+
+describe("inlineEditDocumentRejection", () => {
+	it("accepts a real file", () => {
+		expect(inlineEditDocumentRejection({ uriScheme: "file", isUntitled: false, isClosed: false })).toBeUndefined()
+	})
+
+	it("rejects a diff preview document", () => {
+		// The regression: an active Forge diff tab made the inline edit read the preview
+		// (already-proposed) text instead of the workspace file.
+		expect(inlineEditDocumentRejection({ uriScheme: "forge-edit-preview", isUntitled: false, isClosed: false })).toMatch(
+			/diff or preview/i,
+		)
+	})
+
+	it("rejects any other non-file scheme", () => {
+		expect(inlineEditDocumentRejection({ uriScheme: "untitled", isUntitled: false, isClosed: false })).toMatch(
+			/diff or preview/i,
+		)
+		expect(inlineEditDocumentRejection({ uriScheme: "output", isUntitled: false, isClosed: false })).toMatch(
+			/diff or preview/i,
+		)
+	})
+
+	it("rejects an untitled buffer", () => {
+		expect(inlineEditDocumentRejection({ uriScheme: "untitled", isUntitled: true, isClosed: false })).toMatch(/untitled/i)
+	})
+
+	it("rejects a closed document", () => {
+		expect(inlineEditDocumentRejection({ uriScheme: "file", isUntitled: false, isClosed: true })).toMatch(/no longer open/i)
+	})
+})
+
+describe("hasDocumentDrifted", () => {
+	it("is false when the document is unchanged", () => {
+		expect(hasDocumentDrifted(FILE, FILE)).toBe(false)
+	})
+
+	it("is true when the user edited during the model call", () => {
+		expect(hasDocumentDrifted(`${FILE}\n# new line\n`, FILE)).toBe(true)
 	})
 })

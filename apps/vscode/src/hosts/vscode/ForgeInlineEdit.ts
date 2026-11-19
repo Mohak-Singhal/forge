@@ -15,7 +15,14 @@ import * as vscode from "vscode"
 import { Logger } from "@/shared/services/Logger"
 import { type ForgeAgentSpec, TrueForgeClient } from "@/trueforge/client"
 import type { EditHunk } from "@/trueforge/edits"
-import { applyAcceptedHunks, buildInlineEditPrompt, type InlineEditRequest, planInlineEdit } from "@/trueforge/inline-edit-core"
+import {
+	applyAcceptedHunks,
+	buildInlineEditPrompt,
+	hasDocumentDrifted,
+	type InlineEditRequest,
+	inlineEditDocumentRejection,
+	planInlineEdit,
+} from "@/trueforge/inline-edit-core"
 import { EDIT_PREVIEW_URI_SCHEME, editPreviewContentProvider } from "./VscodeEditPreview"
 
 /** Pre-images of applied inline edits, newest last, for exact undo. */
@@ -138,6 +145,19 @@ export async function runInlineEdit(context: vscode.ExtensionContext): Promise<v
 		void vscode.window.showWarningMessage("Forge: select the code you want to change first.")
 		return
 	}
+	const document = editor.document
+	// The inline edit reads this document and later writes back to its URI. A diff or
+	// preview tab has no workspace file behind it, so editing it would propose hunks
+	// against the wrong text (a real defect seen when a Forge diff tab was active).
+	const rejection = inlineEditDocumentRejection({
+		uriScheme: document.uri.scheme,
+		isUntitled: document.isUntitled,
+		isClosed: document.isClosed,
+	})
+	if (rejection) {
+		void vscode.window.showWarningMessage(`Forge: ${rejection}`)
+		return
+	}
 	const instruction = await vscode.window.showInputBox({
 		title: "Forge inline edit",
 		prompt: "Describe the change in plain language",
@@ -148,7 +168,6 @@ export async function runInlineEdit(context: vscode.ExtensionContext): Promise<v
 		return
 	}
 
-	const document = editor.document
 	const path = vscode.workspace.asRelativePath(document.uri, false)
 	const request: InlineEditRequest = {
 		path,
@@ -188,6 +207,15 @@ export async function runInlineEdit(context: vscode.ExtensionContext): Promise<v
 
 	const decision = await reviewHunks(request, plan!)
 	if (!decision) {
+		return
+	}
+	// The accepted hunks were computed against the text captured before the model call.
+	// If the file changed while the review was happening, writing would replace the
+	// user's newer content with a proposal built from stale bytes. Refuse instead.
+	if (document.isClosed || hasDocumentDrifted(document.getText(), request.content)) {
+		void vscode.window.showErrorMessage(
+			"Forge: the file changed while Forge was working, so nothing was written. Re-run the inline edit.",
+		)
 		return
 	}
 	const outcome = applyAcceptedHunks(request.content, plan!.hunks, decision.accepted)

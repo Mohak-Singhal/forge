@@ -148,3 +148,37 @@ export function applyAcceptedHunks(
 		rejected: result.rejected,
 	}
 }
+
+/**
+ * Why an active editor cannot be used for an inline edit, or undefined when it can.
+ *
+ * The inline edit reads the active document's text and later writes back to its URI.
+ * A diff/preview tab or an untitled buffer has no file behind it, so editing it would
+ * propose hunks against content that is not the workspace file and could write to the
+ * wrong URI. Refusing is the only safe answer.
+ */
+export function inlineEditDocumentRejection(state: {
+	uriScheme: string
+	isUntitled: boolean
+	isClosed: boolean
+}): string | undefined {
+	if (state.isClosed) {
+		return "the editor is no longer open. Open the file and select the code again."
+	}
+	if (state.isUntitled) {
+		return "this is an untitled buffer with no file on disk. Save it first, or open the real file."
+	}
+	if (state.uriScheme !== "file") {
+		return "this is a diff or preview tab, not a file. Click the file's own tab, select the code, and try again."
+	}
+	return undefined
+}
+
+/**
+ * True when the document changed between capturing the request and applying the
+ * accepted hunks. The accepted content was computed against the captured text, so
+ * applying it to different text would overwrite whatever changed in the meantime.
+ */
+export function hasDocumentDrifted(currentText: string, capturedText: string): boolean {
+	return currentText !== capturedText
+}
