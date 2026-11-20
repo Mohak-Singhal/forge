@@ -22,7 +22,9 @@ import {
 	type InlineEditRequest,
 	inlineEditDocumentRejection,
 	planInlineEdit,
+	streamInlineEdit,
 } from "@/trueforge/inline-edit-core"
+import { modelChainFromSpec } from "@/trueforge/model-fallback"
 import { EDIT_PREVIEW_URI_SCHEME, editPreviewContentProvider } from "./VscodeEditPreview"
 
 /** Pre-images of applied inline edits, newest last, for exact undo. */
@@ -56,7 +58,7 @@ function loadAgentSpec(extensionPath: string): ForgeAgentSpec | undefined {
 }
 
 /** Drain a TrueForge turn and return the assistant's text. */
-async function runInlineTurn(prompt: string, extensionPath: string): Promise<string> {
+async function runInlineTurn(prompt: string, extensionPath: string, onFallback: (note: string) => void): Promise<string> {
 	const client = new TrueForgeClient(process.env.TRUEFORGE_URL ?? "http://localhost:8790")
 	const spec = loadAgentSpec(extensionPath) ?? {
 		instructions: "You are Forge. Reply with JSON only.",
@@ -68,23 +70,14 @@ async function runInlineTurn(prompt: string, extensionPath: string): Promise<str
 		model: spec.model,
 	}
 	const sessionId = await client.createInlineSession(inlineSpec)
-	let text = ""
-	for await (const event of client.streamTurn(sessionId, prompt)) {
-		const record = event as Record<string, unknown>
-		if (record?.type === "model.message.delta") {
-			const delta = record as { content?: string | null }
-			if (delta.content) {
-				text += delta.content
-			}
-		}
-		if (record?.type === "turn.ended" || record?.type === "turn.failed") {
-			break
-		}
-	}
-	if (!text.trim()) {
-		throw new Error("inline edit: TrueForge returned no text for this turn")
-	}
-	return text
+	return streamInlineEdit(
+		modelChainFromSpec(inlineSpec.model),
+		() => client.streamTurn(sessionId, prompt),
+		async (model, note) => {
+			onFallback(note)
+			await client.switchModel(sessionId, inlineSpec, model)
+		},
+	)
 }
 
 /** Show the proposed hunks as a diff tab and collect per-hunk decisions. */
@@ -181,8 +174,11 @@ export async function runInlineEdit(context: vscode.ExtensionContext): Promise<v
 	try {
 		await vscode.window.withProgress(
 			{ location: vscode.ProgressLocation.Notification, title: "Forge is thinking…", cancellable: false },
-			async () => {
-				const reply = await runInlineTurn(buildInlineEditPrompt(request), context.extensionPath)
+			async (progress) => {
+				const reply = await runInlineTurn(buildInlineEditPrompt(request), context.extensionPath, (message) => {
+					Logger.log(`[Forge] ${message}`)
+					progress.report({ message })
+				})
 				plan = planInlineEdit(request, reply)
 			},
 		)

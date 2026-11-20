@@ -9,6 +9,7 @@ import {
 	parseInlineEditReply,
 	planInlineEdit,
 	selectedRegion,
+	streamInlineEdit,
 } from "./inline-edit-core"
 
 const FILE = [
@@ -187,5 +188,48 @@ describe("hasDocumentDrifted", () => {
 
 	it("is true when the user edited during the model call", () => {
 		expect(hasDocumentDrifted(`${FILE}\n# new line\n`, FILE)).toBe(true)
+	})
+})
+
+describe("streamInlineEdit", () => {
+	it("discards a failed turn's text and replays the prompt on the configured fallback", async () => {
+		const primary = "gateway/model"
+		const fallback = "groq/gpt-oss-120b"
+		let model = primary
+		const attempts: string[] = []
+
+		const reply = await streamInlineEdit(
+			{ primary, fallbacks: [fallback] },
+			async function* () {
+				attempts.push(model)
+				if (model === primary) {
+					yield { type: "model.message.delta", content: "partial" }
+					yield { type: "turn.done", state: { status: "error", message: "Cannot connect to API: bad port" } }
+					return
+				}
+				yield { type: "model.message.delta", content: "fallback reply" }
+				yield { type: "turn.done", state: { status: "done" } }
+			},
+			async (next) => {
+				model = next
+			},
+		)
+
+		expect(attempts).toEqual([primary, fallback])
+		expect(reply).toBe("fallback reply")
+	})
+
+	it("preserves the harness error when the model is unavailable and no fallback is configured", async () => {
+		await expect(
+			streamInlineEdit(
+				{ primary: "gateway/model", fallbacks: [] },
+				async function* () {
+					yield { type: "turn.done", state: { status: "error", message: "Cannot connect to API: bad port" } }
+				},
+				async () => {
+					throw new Error("Unexpected model switch")
+				},
+			),
+		).rejects.toThrow("Cannot connect to API: bad port")
 	})
 })

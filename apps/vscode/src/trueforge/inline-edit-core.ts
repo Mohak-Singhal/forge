@@ -8,6 +8,48 @@
  */
 
 import { applyHunks, type EditHunk } from "./edits"
+import { attemptOrder, decideFallback, type ModelChain } from "./model-fallback"
+
+export async function streamInlineEdit(
+	chain: ModelChain,
+	stream: () => AsyncIterable<unknown>,
+	switchModel: (model: string, note: string) => Promise<void>,
+): Promise<string> {
+	const order = attemptOrder(chain)
+	for (const [index, model] of order.entries()) {
+		try {
+			let text = ""
+			for await (const event of stream()) {
+				const record = event as
+					| { type?: string; content?: string; state?: { status?: string; message?: string } }
+					| undefined
+				if (record?.type === "model.message.delta") {
+					text += record.content ?? ""
+				}
+				if (record?.type === "turn.done" && record.state?.status === "cancelled") {
+					throw new Error("Forge inline edit was cancelled.")
+				}
+				if (
+					record?.type === "turn.failed" ||
+					(record?.type === "turn.done" && ["error", "failed"].includes(record.state?.status ?? ""))
+				) {
+					throw new Error(record.state?.message || "TrueForge did not complete the inline edit.")
+				}
+			}
+			if (!text.trim()) {
+				throw new Error("TrueForge returned no text for this inline edit.")
+			}
+			return text
+		} catch (error) {
+			const fallback = decideFallback(chain, model, error, index + 1)
+			if (!fallback.next) {
+				throw error
+			}
+			await switchModel(fallback.next, fallback.note)
+		}
+	}
+	throw new Error("No model is configured for Forge inline edits.")
+}
 
 export interface InlineEditRequest {
 	/** Workspace-relative path, for display and for the prompt. */
