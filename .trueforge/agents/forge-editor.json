@@ -3,9 +3,8 @@
   "model": {
     "name": "opencode-free-models/deepseek-v41-flash-free",
     "fallbacks": [
-      "local-ollama/llama32-3b",
-      "local-ollama/llama32-1b",
-      "local-ollama/qwen-coder-local"
+      "groq/qwen38-27b",
+      "groq/gpt-oss-120b"
     ]
   },
   "mcp_servers": [

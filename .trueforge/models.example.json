@@ -1,32 +1,27 @@
 {
   "providers": [
     {
-      "name": "ollama-local",
+      "name": "groq",
       "type": "custom",
-      "base_url": "http://localhost:11434/v1",
-      "auth": { "api_key": "ollama" },
+      "base_url": "https://api.groq.com/openai/v1",
+      "auth": { "api_key": "ENV:GROQ_API_KEY" },
       "models": [
         {
-          "model_id": "qwen2.5-coder:7b",
-          "name": "qwen25coder7b",
-          "properties": { "context_length": 32768, "max_output_tokens": 16000 }
+          "model_id": "qwen/qwen3.8-27b",
+          "name": "qwen38-27b",
+          "properties": { "context_length": 32768, "max_output_tokens": 8192 }
         }
       ]
     },
     {
       "name": "openai-compatible",
       "type": "custom",
-      "base_url": "http://localhost:8080/v1",
+      "base_url": "https://example-gateway.com/v1",
       "auth": { "api_key": "ENV:OPENAI_API_KEY" },
       "models": [
         {
           "model_id": "provider/primary-model",
           "name": "primarymodel",
-          "properties": { "context_length": 128000, "max_output_tokens": 16000 }
-        },
-        {
-          "model_id": "provider/fallback-model",
-          "name": "fallbackmodel",
           "properties": { "context_length": 128000, "max_output_tokens": 16000 }
         }
       ]
