@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Forge</title>
+  <desc id="desc">A geometric anvil mark representing reviewed code changes.</desc>
+  <defs>
+    <linearGradient id="background" x1="12" y1="12" x2="116" y2="116" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#172033"/>
+      <stop offset="1" stop-color="#0B1020"/>
+    </linearGradient>
+    <linearGradient id="steel" x1="34" y1="38" x2="93" y2="97" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FAFC"/>
+      <stop offset="1" stop-color="#B8C5D8"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="112" height="112" rx="28" fill="url(#background)"/>
+  <path d="M30 39h67l-9 15H42l-12-15Z" fill="url(#steel)"/>
+  <path d="M43 57h43L74 76H53L43 57Z" fill="url(#steel)"/>
+  <path d="M54 81h20l12 18H42l12-18Z" fill="url(#steel)"/>
+  <path d="m91 28 4.6 11.4L107 44l-11.4 4.6L91 60l-4.6-11.4L75 44l11.4-4.6L91 28Z" fill="#F3A64A"/>
+</svg>
