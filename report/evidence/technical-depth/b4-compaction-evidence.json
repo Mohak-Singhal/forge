@@ -1,0 +1,30 @@
+{
+  "sessionId": "01m7saa926bpns35q2yv75ecv8",
+  "thresholdUsed": 2500,
+  "productionThreshold": 120000,
+  "elapsedSeconds": 326,
+  "finishReason": "completed",
+  "toolsSeen": [],
+  "compactionNotes": [
+    "[TrueForge] compacting thread context — context threshold reached. Older turns are summarised so the task can continue.",
+    "[TrueForge] context compaction finished in 0ms; the thread continues inside the window.",
+    "[TrueForge] compacting thread context — context threshold reached. Older turns are summarised so the task can continue.",
+    "[TrueForge] context compaction finished in 0ms; the thread continues inside the window.",
+    "[TrueForge] compacting thread context — context threshold reached. Older turns are summarised so the task can continue.",
+    "[TrueForge] context compaction finished in 0ms; the thread continues inside the window.",
+    "[TrueForge] compacting thread context — context threshold reached. Older turns are summarised so the task can continue.",
+    "[TrueForge] context compaction finished in 0ms; the thread continues inside the window.",
+    "[TrueForge] compacting thread context — context threshold reached. Older turns are summarised so the task can continue.",
+    "[TrueForge] context compaction finished in 0ms; the thread continues inside the window.",
+    "[TrueForge] compacting thread context — context threshold reached. Older turns are summarised so the task can continue.",
+    "[TrueForge] context compaction finished in 0ms; the thread continues inside the window.",
+    "[TrueForge] compacting thread context — context threshold reached. Older turns are summarised so the task can continue.",
+    "[TrueForge] context compaction finished in 0ms; the thread continues inside the window."
+  ],
+  "errors": [],
+  "rawCompactionStarted": 7,
+  "rawCompactionFinished": 7,
+  "usageInputTokensSeen": [],
+  "sessionJsonHasStarted": true,
+  "assistantTail": "ery, dotenv handling, plugin loading and the defaults; the module-level `cli = FlaskGroup(name=\"flask\", ...)` (near line 1118) is what `main()` drives.\n- **The decorator:** the three built-ins are ordinary module-level Click command objects declared with `@click.command(\"run\", ...)`, `@click.command(\"shell\", ...)`, `@click.command(\"routes\", ...)`. `run_command` is additionally decorated with `@pass_script_info`, while `shell_command` and `routes_command` carry `@with_appcontext`; `run_command` needs no app context up front because it loads the app itself.\n- **The `add_command` call:** inside `FlaskGroup.__init__` (~lines 563–598), after registering the eager options `-e/--env-file`, `-A/--app`, `--debug` and `version_option` and setting `auto_envvar_prefix=\"FLASK\"`, the block `if add_default_commands:` performs exactly three calls — `self.add_command(run_command)`, `self.add_command(shell_command)`, `self.add_command(routes_command)`.\n- **Plugin commands use the same entry point:** `_load_plugin_commands()` iterates `importlib.metadata.entry_points(group=\"flask.commands\")` and calls `self.add_command(ep.load(), ep.name)`; `get_command()`/`list_commands()` then merge those built-in and plugin commands with the loaded application's `app.cli` group, entering the app context via `ctx.with_resource(app.app_context())`.\n- **Net effect:** `flask run|shell|routes` resolve through `FlaskGroup`'s command lookup to the three pre-registered `Command` objects, which is why `flask --debug run` works — `run_command.params.insert(0, _debug_option)` puts the flag ahead of the command's own params.\n\n**Sources named:** the test module is `tests/test_cli.py` (e.g. `TestRoutes`, the dotenv precedence tests, `test_run_cert_*`, `test_cli_blueprints`, `test_help_echo_loading_error`), and the documentation page is `docs/cli.rst` (covering `cli_group`, Application Context/`with_appcontext`, Plugins via `flask.commands`, and Custom Scripts with `@click.group(cls=FlaskGroup, create_app=...)`)."
+}

@@ -1,0 +1,351 @@
+latency_ms=214
+
+query: "Add a new built-in CLI command flask config that prints the loaded application's configuration as JSON, masking the values of any key containing SECRET, PASSWORD, TOKEN or KEY as "***". It must appear…" · intent: tests+docs
+retrieval budget: 2823/4000 tokens across 8 chunk(s), selected from 42 candidate(s)
+
+## src/flask/cli.py:361-400 (matches "cli", "commands", "command", "loaded" · BM25 144.08 · lines 361-400 · 387 tok)
+                " 'flask --app' option, 'FLASK_APP' environment"
+                " variable, or a 'wsgi.py' or 'app.py' file in the"
+                " current directory."
+            )
+
+        if self.set_debug_flag:
+            # Update the app's debug flag through the descriptor so that
+            # other values repopulate as well.
+            app.debug = get_debug_flag()
+
+        self._loaded_app = app
+        return app
+
+
+pass_script_info = click.make_pass_decorator(ScriptInfo, ensure=True)
+
+F = t.TypeVar("F", bound=t.Callable[..., t.Any])
+
+
+def with_appcontext(f: F) -> F:
+    """Wraps a callback so that it's guaranteed to be executed with the
+    script's application context.
+
+    Custom commands (and their options) registered under ``app.cli`` or
+    ``blueprint.cli`` will always have an app context available, this
+    decorator is not required in that case.
+
+    .. versionchanged:: 2.2
+        The app context is active for subcommands as well as the
+        decorated callback. The app context is always available to
+        ``app.cli`` command and parameter callbacks.
+    """
+
+    @click.pass_context
+    def decorator(ctx: click.Context, /, *args: t.Any, **kwargs: t.Any) -> t.Any:
+        if not current_app:
+            app = ctx.ensure_object(ScriptInfo).load_app()
+            ctx.with_resource(app.app_context())
+
+        return ctx.invoke(f, *args, **kwargs)
+
+---
+
+## src/flask/cli.py:521-560 (matches "commands", "containing", "command", "loaded" · BM25 140.88 · lines 521-560 · 499 tok)
+        "Load environment variables from this file, taking precedence over"
+        " those set by '.env' and '.flaskenv'. Variables set directly in the"
+        " environment take highest precedence. python-dotenv must be installed."
+    ),
+    is_eager=True,
+    expose_value=False,
+    callback=_env_file_callback,
+)
+
+
+class FlaskGroup(AppGroup):
+    """Special subclass of the :class:`AppGroup` group that supports
+    loading more commands from the configured Flask app.  Normally a
+    developer does not have to interface with this class but there are
+    some very advanced use cases for which it makes sense to create an
+    instance of this. see :ref:`custom-scripts`.
+
+    :param add_default_commands: if this is True then the default run and
+        shell commands will be added.
+    :param add_version_option: adds the ``--version`` option.
+    :param create_app: an optional callback that is passed the script info and
+        returns the loaded app.
+    :param load_dotenv: Load the nearest :file:`.env` and :file:`.flaskenv`
+        files to set environment variables. Will also change the working
+        directory to the directory containing the first file found.
+    :param set_debug_flag: Set the app's debug flag.
+
+    .. versionchanged:: 3.1
+        ``-e path`` takes precedence over default ``.env`` and ``.flaskenv`` files.
+
+    .. versionchanged:: 2.2
+        Added the ``-A/--app``, ``--debug/--no-debug``, ``-e/--env-file`` options.
+
+    .. versionchanged:: 2.2
+        An app context is pushed when running ``app.cli`` commands, so
+        ``@with_appcontext`` is no longer required for those commands.
+
+    .. versionchanged:: 1.0
+        If installed, python-dotenv will be used to load environment variables
+        from :file:`.env` and :file:`.flaskenv` files.
+
+---
+
+## src/flask/config.py:41-80 (matches "key", "loaded", "configuration", "values" · BM25 137.68 · lines 41-80 · 430 tok)
+        if self.get_converter is not None:
+            rv = self.get_converter(rv)
+
+        return rv  # type: ignore[no-any-return]
+
+    def __set__(self, obj: App, value: t.Any) -> None:
+        obj.config[self.__name__] = value
+
+
+class Config(dict):  # type: ignore[type-arg]
+    """Works exactly like a dict but provides ways to fill it from files
+    or special dictionaries.  There are two common patterns to populate the
+    config.
+
+    Either you can fill the config from a config file::
+
+        app.config.from_pyfile('yourconfig.cfg')
+
+    Or alternatively you can define the configuration options in the
+    module that calls :meth:`from_object` or provide an import path to
+    a module that should be loaded.  It is also possible to tell it to
+    use the same module and with that provide the configuration values
+    just before the call::
+
+        DEBUG = True
+        SECRET_KEY = 'development key'
+        app.config.from_object(__name__)
+
+    In both cases (loading from any Python file or loading from modules),
+    only uppercase keys are added to the config.  This makes it possible to use
+    lowercase values in the config file for temporary values that are not added
+    to the config or to define the config keys in the same file that implements
+    the application.
+
+    Probably the most interesting way to load configurations is from an
+    environment variable pointing to a file::
+
+        app.config.from_envvar('YOURAPPLICATION_SETTINGS')
+
+    In this case before launching the application you have to set this
+
+---
+
+## tests/test_basic.py:401-440 (matches "secret", "loaded", "key", "json" · BM25 133.35 · lines 401-440 · 337 tok)
+    @app.get("/")
+    def get_session() -> dict[str, t.Any]:
+        return dict(flask.session)
+
+    # Set session with initial secret key, and two valid expiring keys
+    app.secret_key, app.config["SECRET_KEY_FALLBACKS"] = (
+        "0 key",
+        ["-1 key", "-2 key"],
+    )
+    client.post()
+    assert client.get().json == {"a": 1}
+    # Change secret key, session can't be loaded and appears empty
+    app.secret_key = "? key"
+    assert client.get().json == {}
+    # Rotate the valid keys, session can be loaded
+    app.secret_key, app.config["SECRET_KEY_FALLBACKS"] = (
+        "+1 key",
+        ["0 key", "-1 key"],
+    )
+    assert client.get().json == {"a": 1}
+
+
+def test_session_expiration(app, client):
+    permanent = True
+
+    @app.route("/")
+    def index():
+        flask.session["test"] = 42
+        flask.session.permanent = permanent
+        return ""
+
+    @app.route("/test")
+    def test():
+        return str(flask.session.permanent)
+
+    rv = client.get("/")
+    assert "set-cookie" in rv.headers
+    match = re.search(r"(?i)\bexpires=([^;]+)", rv.headers["set-cookie"])
+    expires = parse_date(match.group())
+    expected = datetime.now(timezone.utc) + app.permanent_session_lifetime
+
+---
+
+## docs/api.rst:681-718 (links to with_appcontext, load_dotenv, FlaskGroup · BM25 132.87 · lines 681-718 · 212 tok)
+            # custom options handling here
+            ...
+        return 'Hello World!'
+    index.provide_automatic_options = False
+    index.methods = ['GET', 'OPTIONS']
+
+    app.add_url_rule('/', index)
+
+.. versionadded:: 0.8
+   The `provide_automatic_options` functionality was added.
+
+Command Line Interface
+----------------------
+
+.. currentmodule:: flask.cli
+
+.. autoclass:: FlaskGroup
+   :members:
+
+.. autoclass:: AppGroup
+   :members:
+
+.. autoclass:: ScriptInfo
+   :members:
+
+.. autofunction:: load_dotenv
+
+.. autofunction:: with_appcontext
+
+.. autofunction:: pass_script_info
+
+   Marks a function so that an instance of :class:`ScriptInfo` is passed
+   as first argument to the click callback.
+
+.. autodata:: run_command
+
+.. autodata:: shell_command
+
+
+---
+
+## tests/test_cli.py:641-680 (matches "cli", "command", "key", "test" · BM25 120.19 · lines 641-680 · 336 tok)
+def test_run_cert_no_ssl(monkeypatch):
+    monkeypatch.setitem(sys.modules, "ssl", None)
+
+    with pytest.raises(click.BadParameter):
+        run_command.make_context("run", ["--cert", "not_here"])
+
+
+def test_cli_blueprints(app):
+    """Test blueprint commands register correctly to the application"""
+    custom = Blueprint("custom", __name__, cli_group="customized")
+    nested = Blueprint("nested", __name__)
+    merged = Blueprint("merged", __name__, cli_group=None)
+    late = Blueprint("late", __name__)
+
+    @custom.cli.command("custom")
+    def custom_command():
+        click.echo("custom_result")
+
+    @nested.cli.command("nested")
+    def nested_command():
+        click.echo("nested_result")
+
+    @merged.cli.command("merged")
+    def merged_command():
+        click.echo("merged_result")
+
+    @late.cli.command("late")
+    def late_command():
+        click.echo("late_result")
+
+    app.register_blueprint(custom)
+    app.register_blueprint(nested)
+    app.register_blueprint(merged)
+    app.register_blueprint(late, cli_group="late_registration")
+
+    app_runner = app.test_cli_runner()
+
+    result = app_runner.invoke(args=["customized", "custom"])
+    assert "custom_result" in result.output
+
+
+---
+
+## src/flask/testing.py:81-120 (matches "cli", "json", "test", "config" · BM25 113.72 · lines 81-120 · 347 tok)
+
+            if url.query:
+                path = f"{path}?{url.query}"
+
+        self.app = app
+        super().__init__(path, base_url, *args, **kwargs)
+
+    def json_dumps(self, obj: t.Any, **kwargs: t.Any) -> str:
+        """Serialize ``obj`` to a JSON-formatted string.
+
+        The serialization will be configured according to the config associated
+        with this EnvironBuilder's ``app``.
+        """
+        return self.app.json.dumps(obj, **kwargs)
+
+
+_werkzeug_version = ""
+
+
+def _get_werkzeug_version() -> str:
+    global _werkzeug_version
+
+    if not _werkzeug_version:
+        _werkzeug_version = importlib.metadata.version("werkzeug")
+
+    return _werkzeug_version
+
+
+class FlaskClient(Client):
+    """Works like a regular Werkzeug test client but has knowledge about
+    Flask's contexts to defer the cleanup of the request context until
+    the end of a ``with`` block. For general information about how to
+    use this class refer to :class:`werkzeug.test.Client`.
+
+    .. versionchanged:: 0.12
+       `app.test_client()` includes preset default environment, which can be
+       set after instantiation of the `app.test_client()` object in
+       `client.environ_base`.
+
+    Basic usage is outlined in the :doc:`/testing` chapter.
+
+---
+
+## docs/cli.rst:401-440 (links to with_appcontext, load_dotenv, FlaskGroup · BM25 108.44 · lines 401-440 · 275 tok)
+    app.register_blueprint(bp, cli_group='other')
+
+.. code-block:: text
+
+    $ flask other create alice
+
+Specifying ``cli_group=None`` will remove the nesting and merge the
+commands directly to the application's level:
+
+.. code-block:: python
+
+    bp = Blueprint('students', __name__, cli_group=None)
+    # or
+    app.register_blueprint(bp, cli_group=None)
+
+.. code-block:: text
+
+    $ flask create alice
+
+
+Application Context
+~~~~~~~~~~~~~~~~~~~
+
+Commands added using the Flask app's :attr:`~Flask.cli` or
+:class:`~flask.cli.FlaskGroup` :meth:`~cli.AppGroup.command` decorator
+will be executed with an application context pushed, so your custom
+commands and parameters have access to the app and its configuration. The
+:func:`~cli.with_appcontext` decorator can be used to get the same
+behavior, but is not needed in most cases.
+
+.. code-block:: python
+
+    import click
+    from flask.cli import with_appcontext
+
+    @click.command()
+    @with_appcontext
+    def do_work():
+        ...

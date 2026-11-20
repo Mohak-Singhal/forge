@@ -1,0 +1,36 @@
+{
+  "providers": [
+    {
+      "name": "ollama-local",
+      "type": "custom",
+      "base_url": "http://localhost:11434/v1",
+      "auth": { "api_key": "ollama" },
+      "models": [
+        {
+          "model_id": "qwen2.5-coder:7b",
+          "name": "qwen25coder7b",
+          "properties": { "context_length": 32768, "max_output_tokens": 16000 }
+        }
+      ]
+    },
+    {
+      "name": "openai-compatible",
+      "type": "custom",
+      "base_url": "http://localhost:8080/v1",
+      "auth": { "api_key": "ENV:OPENAI_API_KEY" },
+      "models": [
+        {
+          "model_id": "provider/primary-model",
+          "name": "primarymodel",
+          "properties": { "context_length": 128000, "max_output_tokens": 16000 }
+        },
+        {
+          "model_id": "provider/fallback-model",
+          "name": "fallbackmodel",
+          "properties": { "context_length": 128000, "max_output_tokens": 16000 }
+        }
+      ]
+    }
+  ],
+  "_comment": "Example only. Copy into TrueForge Settings → Models with your own values. Keys live only in the TrueForge server config — never in this repo."
+}

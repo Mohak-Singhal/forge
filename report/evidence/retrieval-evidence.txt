@@ -1,0 +1,17 @@
+QUERY: built-in CLI command that prints application config as JSON masking secrets
+retrieval budget: 2220/4000 tokens across 6 chunk(s) from 12 candidate(s)
+dropped 6 candidate(s) to stay inside the budget:
+- src/flask/blueprints.py:41-80 — chunk cap reached (6 chunks already packed)
+- docs/config.rst:121-160 — chunk cap reached (6 chunks already packed)
+- docs/cli.rst:521-557 — chunk cap reached (6 chunks already packed)
+- tests/test_json.py:1-40 — chunk cap reached (6 chunks already packed)
+- docs/config.rst:41-80 — chunk cap reached (6 chunks already packed)
+- CHANGES.rst:521-560 — chunk cap reached (6 chunks already packed)
+
+## tests/test_cli.py:641-680 (matches "cli", "command", "application" · BM25 41.37 · lines 641-680 · 336 tok)
+def test_run_cert_no_ssl(monkeypatch):
+    monkeypatch.setitem(sys.modules, "ssl", None)
+
+    with pytest.raises(click.BadParameter):
+        run_command.make_context("run", ["--cert", "not_here"])
+

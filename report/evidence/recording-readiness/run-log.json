@@ -1,0 +1,141 @@
+{
+  "session": "2026-11-19 recording readiness (real VS Code dev host)",
+  "repo": {
+    "path": "/Users/mohaksinghal/Documents/GitHub/vscode agent ",
+    "branch": "forge",
+    "headBefore": "bcf5813",
+    "headAfter": "60fa408",
+    "fixCommit": "bda6404",
+    "gatesCommit": "60fa408",
+    "workingTreeClean": true
+  },
+  "host": {
+    "kind": "VS Code Extension Development Host",
+    "vscodeVersion": "1.147.0",
+    "pid": 61223,
+    "extensionDevelopmentPath": "/Users/mohaksinghal/Documents/GitHub/vscode agent /apps/vscode",
+    "workspace": "/Users/mohaksinghal/Documents/GitHub/forge-demo/flask",
+    "trueforge": "http://localhost:8790",
+    "providers": ["local-ollama", "opencode-free-models"]
+  },
+  "fileUnderTest": "src/flask/helpers.py",
+  "originalSha256": "ac96607bbfc9dbcf09d5442fe7e90d7f8a046b0df7d8f3fc3535b44112016d71",
+  "runs": [
+    {
+      "id": "A-reject",
+      "action": "cmd+alt+k, exact competition instruction, Reject Hunk",
+      "hunks": 1,
+      "sha256After": "ac96607bbfc9dbcf09d5442fe7e90d7f8a046b0df7d8f3fc3535b44112016d71",
+      "gitStatus": "",
+      "outcome": "PASS no write"
+    },
+    {
+      "id": "A-accept-1",
+      "action": "same instruction, Accept Hunk",
+      "hunks": 1,
+      "sha256After": "43896bbca3077a35bbcd098b91b2ba631f9577c34adae203359bef3620e8c5b5",
+      "gitStatus": "M src/flask/helpers.py",
+      "outcome": "PASS applied"
+    },
+    {
+      "id": "A-undo-1",
+      "action": "Command Palette: Forge Undo Last Edit",
+      "sha256After": "ac96607bbfc9dbcf09d5442fe7e90d7f8a046b0df7d8f3fc3535b44112016d71",
+      "gitStatus": "",
+      "outcome": "PASS exact restore"
+    },
+    {
+      "id": "A-accept-2-undo-keybinding",
+      "action": "same instruction, Accept Hunk, then cmd+alt+z with helpers.py focused",
+      "sha256AfterAccept": "7670efff1fdf26bf84b8088ed9c9cc99dad57cb38c94ae9f640a46302cdc5837",
+      "sha256AfterUndo": "ac96607bbfc9dbcf09d5442fe7e90d7f8a046b0df7d8f3fc3535b44112016d71",
+      "gitStatusAfterUndo": "",
+      "outcome": "PASS keybinding undo exact restore"
+    },
+    {
+      "id": "A-two-hunk-accept-1-reject-2",
+      "action": "instruction asking for two hunks; Accept Hunk 1/2 (FLASK_DEBUG false set), Reject Hunk 2/2 (docstring reword)",
+      "hunks": 2,
+      "sha256After": "9e989e5847534f8c0d348b301c966af82db5b7d8a1191ccd7e6c590b28981203",
+      "gitStatus": "M src/flask/helpers.py",
+      "verifiedContent": {
+        "hunk1Applied": "return bool(val and val.lower() not in {\"0\", \"false\", \"no\", \"off\", \"n\"})",
+        "hunk2Rejected": "get_load_dotenv docstring still starts with 'Get whether'"
+      },
+      "outcome": "PASS per-hunk independence"
+    },
+    {
+      "id": "A-two-hunk-undo",
+      "action": "cmd+alt+z with helpers.py focused",
+      "sha256After": "ac96607bbfc9dbcf09d5442fe7e90d7f8a046b0df7d8f3fc3535b44112016d71",
+      "gitStatus": "",
+      "outcome": "PASS exact restore"
+    },
+    {
+      "id": "defect-repro-diff-tab-read",
+      "action": "with the Forge diff tab active, select all in the diff and cmd+alt+k",
+      "observedBeforeFix": "input box opened and the model reasoned about the preview text ('already treats off/n as false')",
+      "sha256AfterCancel": "ac96607bbfc9dbcf09d5442fe7e90d7f8a046b0df7d8f3fc3535b44112016d71",
+      "outcome": "DEFECT CONFIRMED then FIXED"
+    },
+    {
+      "id": "guard-untitled",
+      "action": "new untitled buffer with text, select all, cmd+alt+k",
+      "observed": "warning 'Forge: this is an untitled buffer with no file on disk...' with no input box",
+      "outcome": "PASS guard live"
+    },
+    {
+      "id": "guard-diff-tab",
+      "action": "after accepting an edit, with the diff tab active, select all, cmd+alt+k",
+      "observed": "warning 'Forge: this is a diff or preview tab, not a file...' with no input box",
+      "outcome": "PASS guard live"
+    },
+    {
+      "id": "post-fix-accept-undo",
+      "action": "normal inline edit, Accept Hunk, then undo via cmd+alt+z",
+      "sha256AfterAccept": "6e28f6509797cbad08dcc6ede3d66423e471c03128dc0f3b85bb8263ddfb178a",
+      "sha256AfterUndo": "ac96607bbfc9dbcf09d5442fe7e90d7f8a046b0df7d8f3fc3535b44112016d71",
+      "gitStatusAfterUndo": "",
+      "outcome": "PASS no regression"
+    },
+    {
+      "id": "escape-cancel",
+      "action": "cmd+alt+k, type instruction, Escape",
+      "sha256After": "ac96607bbfc9dbcf09d5442fe7e90d7f8a046b0df7d8f3fc3535b44112016d71",
+      "gitStatus": "",
+      "outcome": "PASS no write"
+    }
+  ],
+  "failover": {
+    "primary": "badendpoint/dead-model (http://127.0.0.1:9/v1)",
+    "fallback": "local-ollama/qwen-coder-local",
+    "elapsedMs": 4218,
+    "finishReason": "completed",
+    "text": "pong",
+    "failoverNote": "[Forge] badendpoint/dead-model unavailable ([Model Error] Cannot connect to API: bad port); failing over to local-ollama/qwen-coder-local",
+    "sessionModel": { "name": "local-ollama/qwen-coder-local" },
+    "workspaceUnchanged": true,
+    "cleanup": {
+      "providers": ["local-ollama", "opencode-free-models"],
+      "badendpointRemoved": true,
+      "specUnchanged": true
+    }
+  },
+  "models": {
+    "ollama": "1.5b present; `ollama serve` started; /api/tags lists qwen2.5-coder:1.5b",
+    "smoke": "SMOKE_OK 2 models answered"
+  },
+  "verification": {
+    "vitest": "1687 passed (116 files)",
+    "bunUnit": "1244 passed (92 files)",
+    "tsc": "exit 0 (apps/vscode)",
+    "biome": "clean on changed files",
+    "buildGate": "BUILD_OK extension.js=26274500B webview=ok",
+    "gates": ["FORK_POINT_OK", "TRUEFORGE_UP", "MCP_TOOLS_OK", "HYGIENE_OK", "WRITEUP_OK", "DEMO_SCRIPT_OK", "SMOKE_OK"]
+  },
+  "workspaceFinal": {
+    "head": "22d92470",
+    "sha256Helpers": "ac96607bbfc9dbcf09d5442fe7e90d7f8a046b0df7d8f3fc3535b44112016d71",
+    "gitStatus": ""
+  }
+}

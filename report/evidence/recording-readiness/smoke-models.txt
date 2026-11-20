@@ -1,0 +1,4 @@
+configured (2): local-ollama/qwen-coder-local, opencode-free-models/deepseek-v41-flash-free
+OK   local-ollama/qwen-coder-local status=done reply="pong"
+OK   opencode-free-models/deepseek-v41-flash-free status=done reply="pong"
+SMOKE_OK 2 models answered

@@ -1,0 +1,10 @@
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /Users/mohaksinghal/Documents/GitHub/vscode agent /apps/vscode
+
+
+ Test Files  4 passed (4)
+      Tests  46 passed (46)
+   Start at  13:19:12
+   Duration  8.08s (transform 17.02s, setup 28.57s, import 549ms, tests 132ms, environment 2ms)
+
