@@ -1,0 +1,181 @@
+{
+  "taskB": {
+    "query": "Add a new built-in CLI command flask config that prints the loaded application's configuration as JSON, masking the values of any key containing SECRET, PASSWORD, TOKEN or KEY as \"***\". It must appear in flask --help, be covered by a test, and be documented alongside the other built-in commands.",
+    "before": {
+      "latencyMs": 128,
+      "files": [
+        "src/flask/cli.py",
+        "src/flask/config.py",
+        "tests/test_basic.py"
+      ],
+      "recall": "1/4",
+      "missing": [
+        "tests/test_cli.py",
+        "docs/cli.rst",
+        "docs/api.rst"
+      ],
+      "tokens": 2479,
+      "budget": 4000,
+      "relevantTokens": 2479,
+      "precisionChunks": "4/6",
+      "chunks": [
+        "src/flask/cli.py:361-400 (387t)",
+        "src/flask/cli.py:681-720 (462t)",
+        "src/flask/cli.py:521-560 (499t)",
+        "src/flask/config.py:41-80 (430t)",
+        "src/flask/cli.py:1001-1040 (364t)",
+        "tests/test_basic.py:401-440 (337t)"
+      ],
+      "reportFirstLines": [
+        "retrieval budget: 2479/4000 tokens across 6 chunk(s), selected from 12 candidate(s)",
+        "dropped 6 candidate(s) to stay inside the budget:",
+        "- src/flask/cli.py:761-800 — chunk cap reached (6 chunks already packed)",
+        "- src/flask/cli.py:481-520 — chunk cap reached (6 chunks already packed)"
+      ],
+      "stable": true
+    },
+    "after": {
+      "latencyMs": 102,
+      "files": [
+        "src/flask/cli.py",
+        "src/flask/config.py",
+        "tests/test_basic.py",
+        "docs/api.rst",
+        "tests/test_cli.py",
+        "docs/cli.rst"
+      ],
+      "recall": "4/4",
+      "missing": [],
+      "tokens": 2938,
+      "budget": 4000,
+      "relevantTokens": 2938,
+      "precisionChunks": "6/8",
+      "chunks": [
+        "src/flask/cli.py:361-400 (387t)",
+        "src/flask/cli.py:521-560 (499t)",
+        "src/flask/config.py:41-80 (430t)",
+        "src/flask/cli.py:681-720 (462t)",
+        "tests/test_basic.py:401-440 (337t)",
+        "docs/api.rst:681-718 (212t)",
+        "tests/test_cli.py:641-680 (336t)",
+        "docs/cli.rst:401-440 (275t)"
+      ],
+      "reportFirstLines": [
+        "query: \"Add a new built-in CLI command flask config that prints the loaded application's configuration as JSON, masking the values of any key containing SECRET, PASSWORD, TOKEN or KEY as \"***\". It must appear in flask --help, be covered by a test, and be documented alongside the other built-in commands.\"",
+        "retrieval budget: 2938/4000 tokens across 8 chunk(s), selected from 8 candidate(s)"
+      ],
+      "stable": true,
+      "intent": {
+        "tests": true,
+        "docs": true
+      },
+      "linkedFiles": [
+        "docs/api.rst",
+        "src/flask/cli.py",
+        "tests/test_cli.py",
+        "docs/cli.rst"
+      ],
+      "considered": 42,
+      "reasons": [
+        "matches \"cli\", \"commands\", \"command\", \"loaded\" · BM25 144.08 · lines 361-400 · 387 tok",
+        "matches \"commands\", \"containing\", \"command\", \"loaded\" · BM25 140.88 · lines 521-560 · 499 tok",
+        "matches \"key\", \"loaded\", \"configuration\", \"values\" · BM25 137.68 · lines 41-80 · 430 tok",
+        "links to with_appcontext, parse_args, _path_is_ancestor · matches \"help\", \"cli\", \"commands\", \"other\" · BM25 136.12 · lines 681-720 · 462 tok",
+        "matches \"secret\", \"loaded\", \"key\", \"json\" · BM25 133.35 · lines 401-440 · 337 tok",
+        "links to with_appcontext, load_dotenv, FlaskGroup · BM25 132.87 · lines 681-718 · 212 tok",
+        "matches \"cli\", \"command\", \"key\", \"test\" · BM25 120.19 · lines 641-680 · 336 tok",
+        "links to with_appcontext, load_dotenv, FlaskGroup · BM25 108.44 · lines 401-440 · 275 tok"
+      ]
+    }
+  },
+  "test-intent": {
+    "query": "Add a test for get_debug_flag parsing the FLASK_DEBUG environment variable",
+    "before": {
+      "latencyMs": 49,
+      "files": [
+        "tests/test_helpers.py",
+        "src/flask/helpers.py",
+        "tests/conftest.py",
+        "src/flask/testing.py",
+        "tests/test_templating.py"
+      ],
+      "recall": "2/2",
+      "missing": [],
+      "tokens": 1667,
+      "budget": 4000,
+      "relevantTokens": 888,
+      "precisionChunks": "3/6",
+      "chunks": [
+        "tests/test_helpers.py:321-360 (311t)",
+        "src/flask/helpers.py:1-40 (329t)",
+        "tests/test_helpers.py:1-40 (248t)",
+        "tests/conftest.py:1-40 (322t)",
+        "src/flask/testing.py:1-40 (380t)",
+        "tests/test_templating.py:441-452 (77t)"
+      ],
+      "reportFirstLines": [
+        "retrieval budget: 1667/4000 tokens across 6 chunk(s), selected from 12 candidate(s)",
+        "dropped 6 candidate(s) to stay inside the budget:",
+        "- src/flask/testing.py:241-280 — chunk cap reached (6 chunks already packed)",
+        "- src/flask/testing.py:81-120 — chunk cap reached (6 chunks already packed)"
+      ],
+      "stable": true
+    },
+    "after": {
+      "latencyMs": 68,
+      "files": [
+        "tests/test_helpers.py",
+        "src/flask/helpers.py",
+        "tests/conftest.py",
+        "tests/test_templating.py",
+        "src/flask/testing.py",
+        "src/flask/app.py"
+      ],
+      "recall": "2/2",
+      "missing": [],
+      "tokens": 2412,
+      "budget": 4000,
+      "relevantTokens": 888,
+      "precisionChunks": "3/8",
+      "chunks": [
+        "tests/test_helpers.py:321-360 (311t)",
+        "tests/test_helpers.py:1-40 (248t)",
+        "src/flask/helpers.py:1-40 (329t)",
+        "tests/conftest.py:1-40 (322t)",
+        "tests/test_templating.py:441-452 (77t)",
+        "src/flask/testing.py:1-40 (380t)",
+        "src/flask/testing.py:241-280 (363t)",
+        "src/flask/app.py:601-640 (382t)"
+      ],
+      "reportFirstLines": [
+        "query: \"Add a test for get_debug_flag parsing the FLASK_DEBUG environment variable\"",
+        "retrieval budget: 2412/4000 tokens across 8 chunk(s), selected from 8 candidate(s)"
+      ],
+      "stable": true,
+      "intent": {
+        "tests": true,
+        "docs": false
+      },
+      "linkedFiles": [
+        "src/flask/app.py",
+        "src/flask/sansio/app.py",
+        "src/flask/testing.py",
+        "src/flask/cli.py",
+        "src/flask/helpers.py",
+        "tests/test_testing.py",
+        "docs/api.rst"
+      ],
+      "considered": 42,
+      "reasons": [
+        "matches \"get_debug_flag\", \"flask_debug\", \"test\" · BM25 59.13 · lines 321-360 · 311 tok",
+        "matches \"get_debug_flag\", \"test\" · BM25 36.20 · lines 1-40 · 248 tok",
+        "links to get_debug_flag, get_load_dotenv · matches \"flask_debug\", \"get_debug_flag\", \"variable\", \"environment\" · BM25 35.89 · lines 1-40 · 329 tok",
+        "matches \"flask_debug\", \"test\" · BM25 32.70 · lines 1-40 · 322 tok",
+        "matches \"environment\", \"test\" · BM25 30.34 · lines 441-452 · 77 tok",
+        "matches \"environment\", \"test\" · BM25 29.30 · lines 1-40 · 380 tok",
+        "matches \"test\", \"environment\" · BM25 26.28 · lines 241-280 · 363 tok",
+        "matches \"flask_debug\", \"get_debug_flag\", \"variable\", \"environment\" · BM25 25.78 · lines 601-640 · 382 tok"
+      ]
+    }
+  }
+}

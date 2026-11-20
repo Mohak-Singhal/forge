@@ -1,0 +1,17 @@
+=== engine gate ===
+apps/vscode/src/sdk/SdkController.ts:447:			forgeEngine: "trueforge",
+apps/vscode/src/sdk/sdk-session-lifecycle.ts:32:	forgeEngine?: "cline-sdk" | "trueforge"
+apps/vscode/src/sdk/sdk-session-lifecycle.ts:487:			if (this.options.forgeEngine === "trueforge") {
+
+=== no provider client construction in Forge path ===
+apps/vscode/src/shared/net.ts:27: * this.client = new OpenAI({
+
+=== MCP tools registered ===
+
+=== approval path ===
+apps/vscode/src/trueforge/trueforge-session-host.ts:10: * Approvals: TF pauses the turn with `tool.approval_required` when a tool is listed
+apps/vscode/src/trueforge/trueforge-session-host.ts:571:			case "tool.approval_required": {
+apps/vscode/src/trueforge/trueforge-session-host.ts:577:				this.handleToolApproval(sessionId, approval).catch((error) => {
+apps/vscode/src/trueforge/trueforge-session-host.ts:754:	private async handleToolApproval(
+apps/vscode/src/trueforge/mcp/tools.ts:19:import { isUnreviewedWriteAllowed, proposalKey, takeHunkDecisions } from "../hunk-review"
+apps/vscode/src/trueforge/mcp/tools.ts:567:			const decision = takeHunkDecisions(proposalKey(proposal.path, proposal.hunks), proposal.hunks.length)

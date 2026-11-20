@@ -1,0 +1,52 @@
+{
+  "toolCount": 8,
+  "totalChars": 3262,
+  "estimatedSchemaTokens": 907,
+  "perTool": [
+    {
+      "name": "editor_read_file",
+      "chars": 371,
+      "estTokens": 104
+    },
+    {
+      "name": "editor_search",
+      "chars": 342,
+      "estTokens": 95
+    },
+    {
+      "name": "editor_repo_map",
+      "chars": 217,
+      "estTokens": 61
+    },
+    {
+      "name": "editor_retrieve",
+      "chars": 417,
+      "estTokens": 116
+    },
+    {
+      "name": "editor_run_command",
+      "chars": 364,
+      "estTokens": 102
+    },
+    {
+      "name": "editor_propose_edit",
+      "chars": 819,
+      "estTokens": 228
+    },
+    {
+      "name": "editor_diagnostics",
+      "chars": 302,
+      "estTokens": 84
+    },
+    {
+      "name": "editor_undo_last_edit",
+      "chars": 421,
+      "estTokens": 117
+    }
+  ],
+  "preloadTradeoff": {
+    "current": "preload: true — all schemas sent every turn",
+    "everyTurnOverheadTokens": 907,
+    "deferred": "preload: false — schemas fetched on discovery; saves this per turn but adds one discovery round trip before first use"
+  }
+}

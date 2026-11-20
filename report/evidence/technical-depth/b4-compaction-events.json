@@ -1,0 +1,156 @@
+{
+  "sessionId": "01m7saa926bpns35q2yv75ecv8",
+  "threshold": 2500,
+  "compactionEvents": [
+    {
+      "type": "thread.context_compaction_finished",
+      "trigger": {
+        "type": "context_threshold_exceeded",
+        "context_tokens": 7520,
+        "threshold_tokens": 2500
+      },
+      "usage": 5874
+    },
+    {
+      "type": "thread.context_compaction_started",
+      "trigger": {
+        "type": "context_threshold_exceeded",
+        "context_tokens": 7520,
+        "threshold_tokens": 2500
+      },
+      "usage": null
+    },
+    {
+      "type": "thread.context_compaction_finished",
+      "trigger": {
+        "type": "context_threshold_exceeded",
+        "context_tokens": 9278,
+        "threshold_tokens": 2500
+      },
+      "usage": 7973
+    },
+    {
+      "type": "thread.context_compaction_started",
+      "trigger": {
+        "type": "context_threshold_exceeded",
+        "context_tokens": 9278,
+        "threshold_tokens": 2500
+      },
+      "usage": null
+    },
+    {
+      "type": "thread.context_compaction_finished",
+      "trigger": {
+        "type": "context_threshold_exceeded",
+        "context_tokens": 9267,
+        "threshold_tokens": 2500
+      },
+      "usage": 7729
+    },
+    {
+      "type": "thread.context_compaction_started",
+      "trigger": {
+        "type": "context_threshold_exceeded",
+        "context_tokens": 9267,
+        "threshold_tokens": 2500
+      },
+      "usage": null
+    },
+    {
+      "type": "thread.context_compaction_finished",
+      "trigger": {
+        "type": "context_threshold_exceeded",
+        "context_tokens": 11693,
+        "threshold_tokens": 2500
+      },
+      "usage": 10301
+    },
+    {
+      "type": "thread.context_compaction_started",
+      "trigger": {
+        "type": "context_threshold_exceeded",
+        "context_tokens": 11693,
+        "threshold_tokens": 2500
+      },
+      "usage": null
+    },
+    {
+      "type": "thread.context_compaction_finished",
+      "trigger": {
+        "type": "context_threshold_exceeded",
+        "context_tokens": 4966,
+        "threshold_tokens": 2500
+      },
+      "usage": 3234
+    },
+    {
+      "type": "thread.context_compaction_started",
+      "trigger": {
+        "type": "context_threshold_exceeded",
+        "context_tokens": 4966,
+        "threshold_tokens": 2500
+      },
+      "usage": null
+    },
+    {
+      "type": "thread.context_compaction_finished",
+      "trigger": {
+        "type": "context_threshold_exceeded",
+        "context_tokens": 7798,
+        "threshold_tokens": 2500
+      },
+      "usage": 6397
+    },
+    {
+      "type": "thread.context_compaction_started",
+      "trigger": {
+        "type": "context_threshold_exceeded",
+        "context_tokens": 7798,
+        "threshold_tokens": 2500
+      },
+      "usage": null
+    },
+    {
+      "type": "thread.context_compaction_finished",
+      "trigger": {
+        "type": "context_threshold_exceeded",
+        "context_tokens": 10467,
+        "threshold_tokens": 2500
+      },
+      "usage": 8667
+    },
+    {
+      "type": "thread.context_compaction_started",
+      "trigger": {
+        "type": "context_threshold_exceeded",
+        "context_tokens": 10467,
+        "threshold_tokens": 2500
+      },
+      "usage": null
+    }
+  ],
+  "inputTokensPerModelMessage": [
+    5786,
+    6046,
+    5860,
+    5817,
+    4866,
+    4773,
+    4392,
+    3161
+  ],
+  "toolCalls": [
+    "editor_read_file",
+    "editor_read_file",
+    "editor_read_file",
+    "editor_read_file",
+    "editor_read_file",
+    "editor_read_file",
+    "read",
+    "read",
+    "editor_read_file",
+    "editor_read_file",
+    "editor_read_file",
+    "editor_read_file"
+  ]
+}

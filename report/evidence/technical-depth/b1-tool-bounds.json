@@ -1,0 +1,22 @@
+{
+  "readDefault": {
+    "chars": 14163,
+    "estTokens": 3935,
+    "header": "# src/flask/cli.py (lines 1-398 of 1136)"
+  },
+  "readRange": {
+    "chars": 2011,
+    "estTokens": 559,
+    "header": "# src/flask/cli.py (lines 520-560 of 1136)"
+  },
+  "search20": {
+    "chars": 2552,
+    "lines": 20,
+    "estTokens": 709
+  },
+  "searchDefault": {
+    "chars": 4782,
+    "lines": 50,
+    "estTokens": 1329
+  }
+}
