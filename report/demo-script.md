@@ -2,15 +2,15 @@
 
 Pre-flight (not recorded): flask checkout at tag 3.1.3 is PRISTINE (`git status` empty) ·
 TrueForge up on localhost:8790 (primary provider: OpenCode gateway; secondary fallback provider: Groq cloud API) ·
-fallback answering: `groq/qwen38-27b` configured in `.trueforge/agents/forge-editor.json` (check: `node .unlazy/verify/smoke-models.mjs` → SMOKE_OK) ·
+fallback answering: `groq/gpt-oss-120b` configured in `.trueforge/agents/forge-editor.json` (check: `node .unlazy/verify/smoke-models.mjs` → SMOKE_OK) ·
 dev host window open on the flask folder · Cline panel visible · terminal font big ·
 screen aspect 16:9 · **you hit record now**.
 
 ## Shot 1 — Task A (0:00–1:20)
-1. Click Cline view → New Task. Editor: helpers.py visible (git diff badge clean).
-2. Type: `Select the function get_debug_flag in helpers.py and treat the values 'off' and 'n' as false as well, case-insensitively, and update the docstring to list every value that is treated as false.`
-3. Cut nothing between instruction and diff. Stream shows AGENT text → tool calls (repo_map → retrieve → read_file → propose_edit).
-4. Approve the two hunks (per-hunk Accept: the code change and the docstring). Nothing is written until both review answers are recorded; the tool then applies only the accepted hunks. Toast confirms the applied count.
+1. Open `src/flask/helpers.py`, select the entire `get_debug_flag` function, and press Cmd+Option+K.
+2. Type: `Treat the values 'off' and 'n' as false as well, case-insensitively, and update the docstring to list every value that is treated as false.`
+3. Cut nothing between instruction and diff. Show the inline diff as soon as it appears.
+4. Review and accept the code and docstring changes in the inline diff. Toast confirms the applied count.
 5. Verification on screen: terminal — `FLASK_DEBUG=off .venv/bin/python -c "from flask.helpers import get_debug_flag; print(get_debug_flag())"` → prints **False**. Show docstring in the editor pane.
 
 ## Shot 2 — Task B (1:20–3:00)
@@ -26,12 +26,12 @@ screen aspect 16:9 · **you hit record now**.
    - `git diff --stat` → ≥3 files
 
 ## Shot 3 — Task C (3:00–4:00)
-1. `git stash` (tree is clean now — this is what "no files changed" means here).
+1. `git stash push -u -m "Round 1 Tasks A and B"` and verify `git status --short` is empty. Keep the Python environment outside the checkout or ignored.
 2. Break the endpoint (terminal, shown): `curl -X PUT .../settings/model-providers` base_url → `http://127.0.0.1:9/v1` (or TF Settings → Models).
-3. Repeat the Task A instruction. The chat shows `[Forge] … unavailable (…); failing over to groq/qwen38-27b` and the turn continues on the real second model instead of erroring. Point at the TrueForge session detail: its model is now `groq/qwen38-27b`. (Verified 2026-11-20: 3.8 s, session model switched, real `pong` answer, workspace untouched.)
+3. Select the function again and repeat the exact Task A inline instruction. If a diff appears, dismiss it without applying it. The chat shows `[Forge] … unavailable (…); failing over to groq/gpt-oss-120b` and the turn continues on the real second model instead of erroring. Point at the TrueForge session detail: its model is now `groq/gpt-oss-120b`. The model-only probe returned `pong` after the switch.
    Optional second beat if time allows: break Groq provider as well and repeat → one clear error naming **both** models, editor responsive, cancel still works (cancel during backoff returned in 45 ms).
 4. `git status --short` → empty output (shown).
-5. Restore provider; note for the write-up: configured fallback present; clear error is the demonstrated anchor.
+5. Restore provider; note for the write-up: record the behavior actually visible in the final cut.
 
 ## Safety beats worth showing
 - Skip every hunk in the review → the tool refuses (`status: "unreviewed"`) and the file is byte-identical. This is the fail-closed gate; do not cut it.

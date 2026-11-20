@@ -3,8 +3,8 @@
   "model": {
     "name": "opencode-free-models/deepseek-v41-flash-free",
     "fallbacks": [
-      "groq/qwen38-27b",
-      "groq/gpt-oss-120b"
+      "groq/gpt-oss-120b",
+      "groq/qwen38-27b"
     ]
   },
   "mcp_servers": [

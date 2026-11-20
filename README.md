@@ -24,13 +24,15 @@ The agent definition used by this extension lives at
 Flask demo repository), VS Code ≥ 1.96, git.
 
 ```bash
-git clone https://github.com/Mohak-Singhal/forge.git && cd forge
+GIT_LFS_SKIP_SMUDGE=1 git clone https://github.com/Mohak-Singhal/forge.git
+cd forge
 bun install
 bun run build:sdk            # SDK packages resolve via compiled dist/
-cd apps/vscode
-bun run package              # check-types + lint + production build; writes dist/extension.js
-cd ..
+(cd apps/vscode && bun run package) # check-types + lint + production build
 ```
+
+The Git LFS asset is an upstream documentation GIF. The extension build can run
+with its pointer file.
 
 ### 1. Start TrueForge (local mode, never deployed)
 
@@ -46,21 +48,20 @@ tools to reach the agent.
 TrueForge listens on `http://localhost:8790`. Open `http://localhost:8790/settings/models`
 and register a provider — a gateway, a free tier, or a cloud model provider behind an
 OpenAI-compatible endpoint. See [`.trueforge/models.example.json`](./.trueforge/models.example.json)
-for importable examples (Groq, and a generic OpenAI-compatible gateway with a primary and
-a fallback model). **The extension never calls a model provider directly; all model
+for cloud provider examples (Groq and a generic OpenAI-compatible gateway). **The extension never calls a model provider directly; all model
 traffic goes through TrueForge.** Keys live only in the TrueForge server's config —
 never in this repository.
 
 For the reference development run, we configured a primary OpenAI-compatible provider
 (`opencode-free-models`, gateway) with `deepseek-v41-flash-free` and a secondary cloud provider
-(`groq`, with `qwen/qwen3.8-27b` mapped as `qwen38-27b`). These are exactly the names in
+(`groq`, using `gpt-oss-120b` first and `qwen38-27b` second). The submission uses cloud models exclusively. These aliases match
 [`.trueforge/agents/forge-editor.json`](./.trueforge/agents/forge-editor.json).
 Approximate cost: $0.
 
 ### 2. Load the extension and point it at a workspace
 
 ```bash
-code --extensionDevelopmentPath="$PWD/apps/vscode" <path-to-workspace>
+code --extensionDevelopmentPath="$PWD/apps/vscode" /absolute/path/to/workspace
 ```
 
 On activation the extension:

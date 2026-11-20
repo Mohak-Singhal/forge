@@ -6,7 +6,7 @@
  *   1. Saves the provider list.
  *   2. Points the primary model's provider at a dead port (an unreachable endpoint).
  *   3. Creates an inline session with the committed agent spec, so the primary fails.
- *   4. Uses the same decision logic the extension uses to fail over to the local model.
+ *   4. Uses the same decision logic the extension uses to fail over to the configured cloud model.
  *   5. Asserts the fallback turn produced real text, and restores the providers.
  *
  * Run: bun run scripts/verify-fallback.mjs
@@ -55,58 +55,41 @@ async function switchSessionModel(sessionId, spec, modelName) {
 	return res.ok
 }
 
-/** Run one turn, returning { text, errorMessage }. */
+/** Read the completed turn from TrueForge, including the model that served it. */
 async function runTurn(sessionId, prompt) {
-	const res = await fetch(`${TF}/api/v1/sessions/${sessionId}/turns`, {
+	const turnsUrl = `${TF}/api/v1/sessions/${sessionId}/turns`
+	const res = await fetch(turnsUrl, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ input: [{ type: "user.message", content: prompt }] }),
+		body: JSON.stringify({ input: [{ type: "user.message", content: prompt }], stream: false }),
+		signal: AbortSignal.timeout(120_000),
 	})
-	if (!res.ok) throw new Error(`create turn: ${res.status} ${await res.text()}`)
-
-	const reader = res.body.getReader()
-	const decoder = new TextDecoder()
-	let buffer = ""
-	let text = ""
-	let errorMessage = ""
-
-	while (true) {
-		const { done, value } = await reader.read()
-		if (done) break
-		buffer += decoder.decode(value, { stream: true })
-		const lines = buffer.split("\n")
-		buffer = lines.pop() ?? ""
-		for (const line of lines) {
-			if (!line.startsWith("data:")) continue
-			const raw = line.slice(5).trim()
-			if (!raw || raw === "[DONE]") continue
-			let evt
-			try {
-				evt = JSON.parse(raw)
-			} catch {
-				continue
-			}
-			const type = evt.type ?? evt.event?.type
-			if (type === "content.delta" || type === "model.message.delta") {
-				text += evt.delta?.content ?? evt.content ?? ""
-			}
-			if (type === "turn.done") {
-				errorMessage = evt.state?.message ?? evt.state?.error ?? ""
-				return { text, errorMessage, status: evt.state?.status }
+	if (!res.ok) throw new Error(`create turn: ${res.status}`)
+	const { id } = (await res.json()).data
+	for (let attempt = 0; attempt < 60; attempt++) {
+		const detail = await fetch(`${turnsUrl}/${id}`, { signal: AbortSignal.timeout(10_000) })
+		if (!detail.ok) throw new Error(`read turn: ${detail.status}`)
+		const { state } = (await detail.json()).data
+		if (["done", "completed", "error", "failed", "cancelled"].includes(state.status)) {
+			return {
+				text: state.output?.content ?? "",
+				model: state.output?.model?.name,
+				errorMessage: state.message ?? "",
+				status: state.status,
 			}
 		}
+		await Bun.sleep(500)
 	}
-	return { text, errorMessage }
+	throw new Error("Timed out waiting for the TrueForge turn")
 }
 
 const committed = JSON.parse(readFileSync(SPEC_PATH, "utf8"))
 // This gate exercises model failover, not the editor tools. The MCP server on
 // 127.0.0.1:8791 exists only while the VS Code extension host is running, and a
 // missing MCP server would fail the turn before the model is ever called — which
-// would prove nothing about fallback. So the probe uses the committed spec's
-// instructions and model chain with `mcp_servers` removed.
+// would prove nothing about fallback. So the probe uses the committed model chain without MCP tools and sends a simple ping.
 const { mcp_servers: _omit, ...specWithoutTools } = committed
-const spec = specWithoutTools
+const spec = { ...specWithoutTools, instructions: "Reply with the single word: pong" }
 console.log(`mcp servers in committed spec: ${(committed.mcp_servers ?? []).length} (dropped for this probe)`)
 const chain = modelChainFromSpec(spec.model)
 const order = attemptOrder(chain)
@@ -130,7 +113,7 @@ try {
 
 	let modelIndex = 0
 	let activeModel = order[0]
-	let result = await runTurn(sessionId, "Reply with the single word: PONG")
+	let result = await runTurn(sessionId, "ping")
 
 	if (result.errorMessage || result.status === "error") {
 		console.log(`primary failed as expected: ${result.errorMessage || result.status}`)
@@ -140,23 +123,22 @@ try {
 			throw new Error(`no failover available: ${decision.note}`)
 		}
 		const switched = await switchSessionModel(sessionId, spec, decision.next)
-		console.log(`session re-pointed to ${decision.next}: ${switched}`)
+		if (!switched) throw new Error(`Could not switch to ${decision.next}`)
+		console.log(`session re-pointed to ${decision.next}`)
 		modelIndex = decision.nextIndex ?? 1
 		activeModel = decision.next
-		result = await runTurn(sessionId, "Reply with the single word: PONG")
+		result = await runTurn(sessionId, "ping")
 		failedOver = true
 	}
 
 	console.log(`fallback turn text: ${JSON.stringify(result.text.slice(0, 120))}`)
 	console.log(`fallback turn error: ${JSON.stringify(result.errorMessage)}`)
-	if (!result.text.trim()) {
-		throw new Error("fallback model produced no text")
+	if (result.model !== activeModel || !/^pong[.!]?$/i.test(result.text.trim())) {
+		throw new Error("The expected fallback model did not return PONG")
 	}
 	console.log("FALLBACK_OK: the second configured model took over automatically")
 } finally {
-	for (const provider of original) {
-		await putProvider(provider.manifest)
-	}
+	await putProvider(primary.manifest)
 	const restored = await getProviders()
 	const primaryRestored = restored.find((p) => p.name === primary.name)
 	console.log(`restored ${primary.name} → ${primaryRestored.manifest.base_url}`)
