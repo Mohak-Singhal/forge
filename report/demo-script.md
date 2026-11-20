@@ -1,53 +1,52 @@
-# Forge — Round 1 demo script (≤ 4:00, Tasks A → B → C, on-screen verification, TF session in Task B)
+# Forge Round 1 walkthrough
 
-Pre-flight (not recorded): flask checkout at tag 3.1.3 is PRISTINE (`git status` empty) ·
-TrueForge up on localhost:8790 (primary provider: OpenCode gateway; secondary fallback provider: Groq cloud API) ·
-fallback answering: `groq/gpt-oss-120b` configured in `.trueforge/agents/forge-editor.json` (check: `node .unlazy/verify/smoke-models.mjs` → SMOKE_OK) ·
-dev host window open on the flask folder · Cline panel visible · terminal font big ·
-screen aspect 16:9 · **you hit record now**.
+**Target length: 3:45–3:55.** Record the editor, TrueForge, and verification terminal. Keep the task order A → B → C. Do not cut from an instruction to the first proposal. Model wait time may be shortened if the edit itself remains continuous.
 
-## Shot 1 — Task A (0:00–1:20)
-1. Open `src/flask/helpers.py`, select the entire `get_debug_flag` function, and press Cmd+Option+K.
-2. Type: `Treat the values 'off' and 'n' as false as well, case-insensitively, and update the docstring to list every value that is treated as false.`
-3. Cut nothing between instruction and diff. Show the inline diff as soon as it appears.
-4. Review and accept the code and docstring changes in the inline diff. Toast confirms the applied count.
-5. Verification on screen: terminal — `FLASK_DEBUG=off .venv/bin/python -c "from flask.helpers import get_debug_flag; print(get_debug_flag())"` → prints **False**. Show docstring in the editor pane.
+## Before recording
 
-## Shot 2 — Task B (1:20–3:00)
-1. New Task. Type the exact brief (NO file mentions):
-   `Add a new built-in CLI command flask config that prints the loaded application's configuration as JSON, masking the values of any key containing SECRET, PASSWORD, TOKEN or KEY as "***". It must appear in flask --help, be covered by a test, and be documented alongside the other built-in commands.`
-2. Agent shows discovery (repo_map → retrieve → search cli.py → read_file on cli.py, cli.rst, test_cli.py). No file names were given.
-3. Approve each proposal: src/flask/cli.py (config command registered in FlaskGroup), tests/test_cli.py (new TestConfig class), docs/cli.rst ("Show the Config"), docs/api.rst (autodata config_command).
-4. TrueForge session visible for this run briefly — ego lite window, already on screen showing the sessions list; click the new flask session; the detail shows TURN=1, model `opencode-free-models/deepseek-v41-flash-free`, TOOL CALLS count, timeline and "Agent steps" (editor_repo_map → editor_retrieve → …). (navigate with: ego-browser → goto `http://localhost:8790/sessions?view=sessions`, `Emulation.setDeviceMetricsOverride {width:1320, height:660, deviceScaleFactor:2}` — the window's webview is a fixed 660×660 so the desktop SPA needs the emulated viewport; leave the window on the session detail for the camera.)
-5. Verification on screen — terminal:
-   - `.venv/bin/python -m pytest tests/test_cli.py -q` → **58 passed, 3 skipped**
-   - `.venv/bin/flask --help | grep -A2 config` → command listed
-   - demo app with SECRET_KEY / DB_PASSWORD / API_TOKEN / NORMAL, run `flask config` → sensitive values `***`, NORMAL visible
-   - `git diff --stat` → ≥3 files
+- Use a fresh Flask 3.1.3 checkout at tag `3.1.3`; confirm `git status --short` is empty.
+- Start TrueForge and the VS Code Extension Development Host with the Forge workspace open.
+- Confirm the cloud primary and Groq fallback answer using `node .unlazy/verify/smoke-models.mjs` (`SMOKE_OK`).
+- Prepare this synthetic Flask app outside the checkout as `/tmp/forge-mask-demo.py`. Use dummy values only:
 
-## Shot 3 — Task C (3:00–4:00)
-1. `git stash push -u -m "Round 1 Tasks A and B"` and verify `git status --short` is empty. Keep the Python environment outside the checkout or ignored.
-2. Break the endpoint (terminal, shown): `curl -X PUT .../settings/model-providers` base_url → `http://127.0.0.1:9/v1` (or TF Settings → Models).
-3. Select the function again and repeat the exact Task A inline instruction. If a diff appears, dismiss it without applying it. The chat shows `[Forge] … unavailable (…); failing over to groq/gpt-oss-120b` and the turn continues on the real second model instead of erroring. Point at the TrueForge session detail: its model is now `groq/gpt-oss-120b`. The model-only probe returned `pong` after the switch.
-   Optional second beat if time allows: break Groq provider as well and repeat → one clear error naming **both** models, editor responsive, cancel still works (cancel during backoff returned in 45 ms).
-4. `git status --short` → empty output (shown).
-5. Restore provider; note for the write-up: record the behavior actually visible in the final cut.
+  ```python
+  from flask import Flask
+  app = Flask(__name__)
+  app.config.update(SECRET_KEY="demo-secret", DB_PASSWORD="demo-password", API_TOKEN="demo-token", NORMAL="visible")
+  ```
+- Keep API keys and provider settings out of frame. Use a readable terminal font and a 16:9 capture.
+- Prepare the Flask virtual environment and verification commands before recording. Keep the environment outside the clean checkout or ignored.
 
-## Safety beats worth showing
-- Skip every hunk in the review → the tool refuses (`status: "unreviewed"`) and the file is byte-identical. This is the fail-closed gate; do not cut it.
-- `Forge: Undo Last Edit` after an applied edit restores the exact pre-edit bytes and refuses if the file changed since. Click the file's own tab first: `cmd+alt+z` needs editor focus (with the diff tab focused it does nothing, by design).
-- Pressing `cmd+alt+k` while a Forge diff tab is active is now refused with a warning; that is the guard, not a failure.
+## Shot 1 — Task A · Inline edit · 0:00–1:05
 
-## Editing notes
-Cut model-wait gaps only; never cut instruction → diff appearing; keep order A → B → C; keep the TF session visible for ≥5s in Task B; total ≤ 4:00.
+1. Open `src/flask/helpers.py`, select the full `get_debug_flag` function, and invoke Forge inline edit with `Cmd+Option+K`.
+2. Enter the task instruction: “Treat the values 'off' and 'n' as false as well, case-insensitively, and update the docstring to list every value that is treated as false.”
+3. Keep the instruction-to-diff sequence continuous. Show the proposal, review controls, and the hunk decision. Accept the intended change.
+4. In the terminal, run `FLASK_DEBUG=off .venv/bin/python -c "from flask.helpers import get_debug_flag; print(get_debug_flag())"` and repeat with `FLASK_DEBUG=n`. Show `False` for both, then show the updated docstring. If time permits, repeat with `OFF` and `N` to demonstrate case-insensitivity.
 
-## Observed in the full dry run (2026-11-18, one sitting)
-- Task A: ~6 approvals expected (ls/retrieve early, propose_edit, pytest run, matrix verification command). The agent seeds `ls` + `git log` first; it checks its own work and reports the 2 pre-existing failures itself (async extra, test_bad_environ_raises_bad_request) — show this if pace allows; it is a strong signal.
-- Task B: ~8-10 approvals; the agent first reads widely (cli.py in chunks, cli.rst, api.rst, test_cli.py, CHANGES.rst); it proposes cli.py → tests → then **self-corrected a missing `import json`** in a follow-up edit without being asked; two docs proposals come as one message (two Approve buttons — click both); it runs the full suite and proves the 2 failures pre-existing via git stash itself.
-- Task C: relaunch needed between B and C if the window died; Provider base_url → 127.0.0.1:9; the error renders in ~2s.
-- The dev host window has been EVICTED repeatedly (this automation environment) — if it happens live on camera, relaunch with: /usr/bin/open -na "/Applications/Visual Studio Code.app" --args --extensionDevelopmentPath=…/apps/vscode --user-data-dir=…/vscode-userdata …/forge-demo/flask and continue; exactly the kind of resilience the video should not hide (mention it in the write-up if it happens).
-- Verification commands for the video terminal beats:
-  - ``FLASK_DEBUG=off .venv/bin/python -c "from flask.helpers import get_debug_flag; print(get_debug_flag())"`` → False
-  - ``.venv/bin/python -m pytest tests/test_cli.py -q`` → 58 passed, 3 skipped (baseline on a clean 3.1.3 checkout is 55 passed, 3 skipped); full suite: 2 failures remain, both pre-existing on tag 3.1.3 (async extra, Werkzeug version) and confirmed by the agent via `git stash`
-  - ``.venv/bin/flask --help`` → `config` listed under Commands
-  - ``.venv/bin/flask --app /private/.../maskdemo.py config`` → SECRET_KEY/PASSWORD/TOKEN/KEY as ***
+## Shot 2 — Task B · Agent mode and context · 1:05–2:40
+
+1. Start a new task without selecting code or naming files. Enter this exact request:
+
+   > Add a new built-in CLI command flask config that prints the loaded application's configuration as JSON, masking the values of any key containing SECRET, PASSWORD, TOKEN or KEY as "***". It must appear in flask --help, be covered by a test, and be documented alongside the other built-in commands.
+
+2. Show the context budget and selected-file reasons, then the agent's discovery and multi-file proposal. Keep the instruction-to-proposal sequence continuous.
+3. Review and accept the intended edits. Briefly show the matching TrueForge session and its MCP tool activity.
+4. Verify in the terminal: `.venv/bin/python -m pytest tests/test_cli.py -q`, `.venv/bin/flask --help`, and `.venv/bin/flask --app /tmp/forge-mask-demo.py config`. Show the test result, `config` in help, sensitive values replaced with `***`, and `NORMAL` still visible.
+
+## Shot 3 — Task C · Cloud failover and safe rejection · 2:40–3:50
+
+1. Switch to a separate pristine Flask 3.1.3 checkout for C. Show `git status --short` is empty.
+2. In TrueForge model settings, temporarily set the primary base URL to `http://127.0.0.1:9/v1` while keeping the TrueForge server and Groq fallback available. Do not expose provider credentials. Repeat the exact A instruction in Forge.
+3. Show the primary failure, automatic switch to Groq `gpt-oss-120b`, and the returned proposal. Reject its hunk; show Forge's rejection result and the TrueForge session's active fallback model.
+4. Run `git status --short` and show the workspace is still clean. Restore the primary provider setting after recording.
+
+## Closing check · 3:50–3:55
+
+End on the three visible verification outcomes. Keep the final video under four minutes and publish a link that judges can open without requesting access.
+
+## Recording cautions
+
+- The demo video has not yet been recorded. Add real final-cut timestamps to the write-up only after publishing it.
+- Press `Cmd+Option+Z` with the source file tab focused when showing undo. The diff preview cannot start a new inline edit; its guard is expected behavior.
+- Do not show a clean-workspace check by resetting or cleaning the C checkout after the task. Prepare C as a separate pristine workspace before recording.

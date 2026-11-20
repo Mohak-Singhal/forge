@@ -4,23 +4,40 @@
 <meta charset="utf-8">
 <title>Forge — Forge-a-thon Round 1 write-up</title>
 <style>
-  @page { size: A4; margin: 16mm 15mm; }
-  body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 10.2pt; line-height: 1.28; color: #111; }
-  h1 { font-size: 17pt; margin: 0 0 2pt 0; }
-  h2 { font-size: 11.5pt; border-bottom: 1.5pt solid #b3001b; padding-bottom: 2pt; margin: 12pt 0 5pt 0; text-transform: uppercase; letter-spacing: .04em; }
-  h3 { font-size: 9.5pt; margin: 8pt 0 3pt 0; }
-  p { margin: 4pt 0; }
+  @page {
+    size: A4;
+    margin: 15mm 15mm 17mm;
+    @bottom-left { content: "FORGE  /  ROUND 1"; color: #68717e; font: 7pt "Helvetica Neue", Helvetica, Arial, sans-serif; letter-spacing: .08em; }
+    @bottom-right { content: counter(page) "  /  " counter(pages); color: #68717e; font: 7pt "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  }
+  body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 9.4pt; line-height: 1.24; color: #17212f; }
+  h1 { font-size: 19pt; line-height: 1.08; margin: 0 0 5pt; color: #121a27; letter-spacing: -.02em; }
+  h2 { font-size: 10.8pt; border-left: 3pt solid #b43a2e; border-bottom: .5pt solid #d9dee6; padding: 2pt 0 3pt 6pt; margin: 11pt 0 5pt; color: #182337; text-transform: uppercase; letter-spacing: .055em; break-after: avoid; }
+  h3 { font-size: 9pt; margin: 7pt 0 3pt; color: #34435a; }
+  p { margin: 3.5pt 0; }
   li { margin: 2pt 0; }
-  table { border-collapse: collapse; width: 100%; font-size: 8.3pt; margin: 5pt 0; }
-  th, td { border: .5pt solid #bbb; padding: 2.5pt 4pt; text-align: left; vertical-align: top; }
-  th { background: #f2f2f2; }
-  code, pre { font-family: "SF Mono", Menlo, monospace; font-size: 7.6pt; background: #f6f6f6; border-radius: 2pt; }
-  code { padding: 0 2pt; }
-  pre { padding: 5pt 7pt; border: .5pt solid #ddd; overflow-x: auto; }
-  .meta { color: #555; font-size: 8.5pt; margin-bottom: 10pt; }
-  .tag { display:inline-block; background:#b3001b; color:#fff; font-size:6.5pt; padding:.5pt 4pt; border-radius:8pt; vertical-align:2pt; margin-left:4pt; letter-spacing:.05em;}
-  .muted { color:#666; font-size:8pt; }
-  .tbd { color:#b3001b; font-weight:700; }
+  table { border-collapse: collapse; width: 100%; font-size: 7.8pt; margin: 5pt 0; break-inside: avoid; }
+  th, td { border: .5pt solid #d5dbe3; padding: 3pt 4pt; text-align: left; vertical-align: top; }
+  th { background: #edf1f5; color: #25334a; font-weight: 700; }
+  tr { break-inside: avoid; }
+  th:first-child, td:first-child { width: 22%; }
+  th:last-child, td:last-child { width: 16%; }
+  td:first-child code { white-space: nowrap; font-size: 6.7pt; }
+  code, pre { font-family: "SF Mono", Menlo, monospace; font-size: 7.2pt; background: #f1f3f6; border-radius: 2pt; color: #28374e; }
+  code { padding: 0 2pt; overflow-wrap: anywhere; }
+  pre { padding: 5pt 7pt; border: .5pt solid #d5dbe3; overflow-wrap: anywhere; white-space: pre-wrap; }
+  a { color: #8f2d25; text-decoration: none; }
+  .eyebrow { color: #a3352b; font-size: 7pt; font-weight: 700; text-transform: uppercase; letter-spacing: .14em; margin-bottom: 4pt; }
+  .meta { color: #576274; font-size: 8pt; margin: 0 0 8pt; }
+  .tag { display:inline-block; background:#b43a2e; color:#fff; font-size:6.4pt; padding:2pt 5pt; border-radius:3pt; vertical-align:2pt; margin-left:4pt; letter-spacing:.08em;}
+  .status { border: .7pt solid #d9dee6; border-left: 3pt solid #b43a2e; background: #f7f8fa; padding: 5pt 7pt; margin: 7pt 0 9pt; font-size: 8pt; }
+  .status b { color: #182337; }
+  .muted { color:#667085; font-size:7.5pt; }
+  .tbd { color:#a3352b; font-weight:700; }
+  ol, ul { padding-left: 15pt; }
+  li > p:first-child { margin-top: 0; }
+  .sec > li { break-inside: auto; }
+  .sec > li > h2 { break-after: avoid; }
   ol.sec { counter-reset: sec; }
   ol.sec > li { list-style: none; counter-increment: sec; }
   ol.sec > li > h2::before { content: counter(sec) ". "; }
@@ -28,8 +45,10 @@
 </head>
 <body>
 
-<h1>Forge — an editor-native coding agent on TrueForge <span class="tag">ROUND 1</span></h1>
-<div class="meta">TrueFoundry Forge-a-thon · flask 3.1.3 · 2026-11-20 · repository: <b>github.com/Mohak-Singhal/forge</b> · fork point commit <code>eff43e19b267e171f597ab03733bfed25090f72d</code></div>
+<div class="eyebrow">TrueFoundry Forge-a-thon · Technical overview</div>
+<h1>Forge <span class="tag">ROUND 1</span></h1>
+<div class="meta">An editor-native coding agent on TrueForge · Flask 3.1.3 · 20 November 2026 · <b>github.com/Mohak-Singhal/forge</b></div>
+<div class="status"><b>Submission status</b> · Tasks A, B, and C were verified. Task C used cloud failover in the VS Code editor and left the workspace unchanged after hunk rejection. The public demo video has not been recorded.</div>
 
 <ol class="sec">
 <li><h2>Team</h2>
@@ -41,7 +60,7 @@
 </li>
 
 <li><h2>Architecture on TrueForge</h2>
-<p>Forge is Cline with its agent loop <b>replaced by TrueForge</b> (trueforge local mode, <code>npx @truefoundry/trueforge@latest</code>, never deployed). The extension never calls a model provider; TrueForge owns the loop, the model, approvals and streaming.</p>
+<p>Forge is Cline with its agent loop <b>replaced by TrueForge</b> (TrueForge local mode, <code>bunx @truefoundry/trueforge@0.185.1</code>, never deployed). The extension never calls a model provider; TrueForge owns the loop, the model, approvals and streaming.</p>
 <p><b>Extension ↔ TrueForge.</b> The extension creates a TrueForge session per task and sends turns through the TrueForge TypeScript SDK (<code>client.ts</code> → <code>SdkSessionHost</code>), rendering streamed events in the Cline webview. The agent definition is committed at <code>.trueforge/agents/forge-editor.json</code>: instructions, primary model, <b>preloaded editor tools</b>, and per-tool approval policy.</p>
 <p><b>Editor capabilities as MCP tools</b> (loopback HTTP server, <code>127.0.0.1:8791</code>, stateless Streamable-HTTP — fresh server+transport per request; auto-registered with TrueForge at boot as the <code>vscode-editor-tools</code> connector):</p>
 <table>
@@ -56,13 +75,14 @@
 <tr><td><code>editor_undo_last_edit</code></td><td>restore exact pre-edit bytes of the latest applied proposal (or a named <code>proposalId</code>)</td><td>TF-gated</td></tr>
 </table>
 <p><b>Approval → review flow.</b> TrueForge pauses on <code>tool.approval_required</code> for gated tools. The extension first opens a real <code>vscode.diff</code> tab (original ↔ proposed) via <code>ForgeHunkReview.ts</code>, then asks <i>Keep Hunk / Skip Hunk</i> for each hunk; those decisions are handed to <code>editor_propose_edit</code> through a keyed registry, so a hunk the user skipped is never written even when the harness call was approved. If no review was recorded the tool <b>fails closed</b>: it returns <code>status: "unreviewed"</code> and writes nothing (an explicit headless test seam is the only exception, and the extension never enables it). Forge write tools are also exempted from the AutoApproveBar, so the diff review cannot be skipped by turning on “Use MCP servers”. Applied edits carry their byte pre-image (<code>undoSnapshots</code>), so undo is exact; a stale hunk no longer discards the accepted ones.</p>
-<p><b>Harness features used, and why.</b> (i) <b>Preloaded tools</b> — deferred discovery made the model call an unmapped <code>read</code> on the first run; preloading fixed it at the harness, not in the model. (ii) <b>Compaction</b>: <code>context_management.compaction</code> with an explicit <code>input_tokens</code> trigger of 120,000, so a long session stays inside the window. TrueForge emits <code>thread.context_compaction_started/finished</code>; the host maps both to visible transcript notes with the actual token count and threshold, rather than running silently. (iii) <code>dynamic_sub_agents</code>, <code>ask_user_questions</code>, <code>iteration_limit</code> 80. (iv) Streaming + cancellation ride the SDK cancel path (A3).</p>
+<p><b>Harness features used, and why.</b> (i) <b>Preloaded tools</b> — deferred discovery made the model call an unmapped <code>read</code>; preloading fixed it at the harness. (ii) <b>Compaction</b>: production uses an <code>input_tokens</code> threshold of 120,000. A live event-path check used 2,500 to trigger compaction quickly: TrueForge emitted seven start/finish pairs, Forge surfaced transcript notes, and the session completed without errors. Evidence: <code>report/evidence/technical-depth/b4-compaction-evidence.json</code> and <code>b4-compaction-events.json</code>. <code>dynamic_sub_agents</code>, <code>ask_user_questions</code>, and <code>iteration_limit</code> 80 are configured, not claimed as exercised. (iii) Streaming and cancellation use the SDK cancel path (A3).</p>
 </li>
 
 <li><h2>How context is selected</h2>
 <p><b>Strategy.</b> The agent never receives whole files up front. Three layers: (1) a <b>repo map</b> of paths plus top-level <code>def</code>/<code>class</code> signatures, itself packed into a 1,500-token budget with omitted-file counts; (2) explicit <b>@mentions</b> — <code>@src/flask/cli.py</code>, <code>@tests/test_cli.py:40-80</code>, <code>@FlaskGroup</code> — parsed and resolved against the workspace by the editor before the model sees anything, then prepended as an un-evictable ground-truth block with line numbers; (3) automatic <b>BM25 retrieval</b> over ~40-line chunks with a skip list for <code>node_modules/.venv/dist</code>.</p>
 <p><b>The budget is real, not just top-k.</b> Ranking alone is not a strategy: a 17K-line repo yields far more plausible chunks than fit, so <code>context-budget.ts</code> packs the ranked list into a hard token ceiling (default 4,000 tokens, ≤6 chunks, ≤900 tokens per chunk). An oversized chunk is <i>compressed on a line boundary</i> rather than allowed to evict several precise ones. The tool result opens with a report — <code>retrieval budget: N/4000 tokens across K chunks from M candidates</code> — then every drop reason (<code>budget exhausted</code>, <code>chunk cap reached</code>, <code>does not fit…</code>) and, per kept chunk, the matched BM25 terms, score, line range and token cost. That is what makes the selection legible to the agent and to a judge in the session view.</p>
-<p><b>Why this works on a 17K-line repo.</b> BM25 is lexical (no embedding API, deterministic, no provider dependency); repo-map signatures orient globally; mentions pin ground truth; the budget keeps the rest bounded. In Task B the agent showed the selection live: <code>repo_map → retrieve → search → read_file</code>, then edited <b>three unnamed files</b> (<code>src/flask/cli.py</code>, <code>tests/test_cli.py</code>, docs) without being told their names.</p>
+<p><b>Observed Task B retrieval trace.</b> For the exact CLI-config brief, retrieval returned eight chunks using <b>2,938/4,000 estimated tokens</b> and recovered all four target areas: <code>src/flask/cli.py</code>, <code>tests/test_cli.py</code>, <code>docs/cli.rst</code>, and <code>docs/api.rst</code>. Each chunk reported matched terms, BM25 score, line range, and token cost; the agent then followed with repo-map/search/read calls to locate command-registration and documentation sections before editing. The measured retrieval comparison and live session trace are in <code>report/evidence/technical-depth/b1-before-after.json</code>, <code>b1-editor-retrieve-output.txt</code>, and <code>b1-session-evidence.json</code>.</p>
+<p><b>Why this works on a 17K-line repo.</b> BM25 is lexical (no embedding API, deterministic, no provider dependency); repo-map signatures orient globally; mentions pin ground truth; the budget keeps the rest bounded. The Task B agent discovered the files without being told their names.</p>
 <p><b>Rejected alternatives.</b> Whole-file concatenation (window blow-out), embedding RAG (provider dependency — violates "model in TrueForge only"), LSP symbols only (too coarse). BM25 was chosen for determinism and zero external dependency. Unit tests cover budget overflow, compression, ranking, eviction reasons and mention parsing/resolution.</p>
 </li>
 
@@ -73,26 +93,15 @@
 <tr><td>Automatic fallback</td><td><code>groq/gpt-oss-120b</code> — <code>openai/gpt-oss-120b</code> via Groq Cloud API (fast OpenAI-compatible cloud endpoint)</td><td>128K</td><td>$0</td></tr>
 </table>
 <p>The submission uses cloud models exclusively. Groq <code>qwen38-27b</code> is configured as a second fallback. The cloud rehearsals cost approximately <b>$0</b> on free tiers. <b>No API key is committed to this repo</b>; the provider key lives only in the TrueForge server's config (see <code>.trueforge/models.example.json</code> for importable provider examples). The extension never sets or reads the provider. <b>To switch models:</b> open TrueForge Settings → Models, add your provider, then change <code>model.name</code> in <code>.trueforge/agents/forge-editor.json</code> (or pick the model in the TrueForge UI/session) and reload — works with any model TrueForge is configured with, any provider.</p>
-<p><b>Task C / resilience.</b> Failure handling is three-tiered: (1) retry the same model with exponential backoff (400/800/1600/3200 ms, capped) while the error is transient — resets, timeouts, 502/503/504, 429; (2) fail over to the next configured model <i>with no user action</i> by re-pointing the inline session through TrueForge and retrying the same prompt; (3) only when every model is exhausted, emit a message naming all tried models. A bad port or rejected key is deliberately <i>not</i> retried. Verified with a live TrueForge model-only probe: primary pointed at <code>127.0.0.1:9</code> → <code>[Model Error] Cannot connect to API: bad port</code> → decision <code>next=groq/gpt-oss-120b</code> → session re-pointed → fallback answered <code>PONG</code> → provider restored. Reproduce with <code>bun run scripts/verify-fallback.mjs</code>. The probe exercises the model switch without editor tools. The fixed editor task still needs its recorded clean-workspace verification.</p>
+<p><b>Task C / resilience.</b> Transient faults retry; eligible failures automatically switch the inline session to the next configured model. In VS Code (2026-11-20), Forge reported the unreachable OpenCode primary, switched to <code>groq/gpt-oss-120b</code>, and returned a one-hunk proposal. I rejected it; Forge confirmed no file changes, the checkout was clean, and the primary was restored. Evidence: <code>report/evidence/taskC-cloud-editor-evidence.json</code>. Demo video remains pending.</p>
 </li>
 
-<li style="break-before: page"><h2>Scorecard</h2>
-<p class="muted">Anchors from the brief; video timestamps refer to the Round 1 demo video (≤ 4:00). <span class="tbd">The video has not been recorded, so C1 is scored 0 here. Editor-UI rows are code-verified and unit-tested; the agent loop, MCP tools, retrieval, resilience and task outcomes were executed for real (see report/FINAL_INDEPENDENT_AUDIT.md).</span></p>
-<table>
-<tr><th>Criterion</th><th>Max pts</th><th>Claim & evidence</th><th>Video</th></tr>
-<tr><td>A1 Inline edit</td><td>10</td><td>diff rendered with per-hunk accept/reject; Task A applied through the review gate (recorded per-hunk decisions, then the write), verified <code>FLASK_DEBUG=off → False</code> and the docstring updated. The editor diff tab itself is not automated in the final audit run; it is code-verified and unit-tested.</td><td class="tbd">Pending</td></tr>
-<tr><td>A2 Agent mode</td><td>10</td><td>Task B: agent discovered and edited ≥3 unnamed files (<code>cli.py</code>, <code>test_cli.py</code>, <code>docs/cli.rst</code>, <code>docs/api.rst</code>); <code>pytest tests/test_cli.py -q</code> → 58 passed, 3 skipped; <code>flask --help</code> lists <code>config</code>; masked JSON shown (<code>SECRET_KEY→***</code>)</td><td class="tbd">Pending</td></tr>
-<tr><td>A3 Streaming &amp; cancellation</td><td>10</td><td>tokens stream live; Cancel mid-run → TF records <code>client-cancelled</code>, workspace byte-consistent (git status clean)</td><td class="tbd">Pending</td></tr>
-<tr><td>B1 Context assembly</td><td>15</td><td>repo map + @file/@symbol mentions + BM25 with a hard 4K-token budget and visible drop reasons (§4); 159 TrueForge unit tests (retrieval, context budget, mentions, hunk review, write gate, approval stream, fallback, cancellation)</td><td class="tbd">Pending</td></tr>
-<tr><td>B2 Diff safety</td><td>10</td><td>real <code>vscode.diff</code> preview + per-hunk Keep/Skip before write; stale hunk leaves others intact; byte-exact <code>editor_undo_last_edit</code></td><td class="tbd">Pending</td></tr>
-<tr><td>B3 Resilience</td><td>10</td><td>verified against the live TrueForge server: 429 retried twice with backoff then a clear error; unreachable primary failed over to the configured fallback (the session model actually switched) and, with the fallback down too, named both models in one error; 500 and 401 surfaced cleanly; cancel during backoff returned in 45 ms with the workspace byte-identical</td><td class="tbd">Pending</td></tr>
-<tr><td>B4 TrueForge integration</td><td>10</td><td>agent loop on TF; editor tools via MCP; approval-driven diff review; preloaded tools + compaction (§3), visible in session (<code>mcp.initialize</code> preloads <code>vscode-editor-tools</code>)</td><td class="tbd">Pending</td></tr>
-<tr><td>C1 Video</td><td>10</td><td>Planned sequence A → B → C, with on-screen verification after each task</td><td class="tbd">Pending</td></tr>
-<tr><td>C2 Write-up</td><td>15</td><td>this PDF: architecture, context strategy, models, trade-offs, limitations + scorecard</td><td class="tbd">Pending</td></tr>
-</table>
+<li><h2>Recorded evidence</h2>
+<p>This evidence index links to the underlying artifacts; it assigns no points. <b>Task A:</b> <a href="https://github.com/Mohak-Singhal/forge/blob/main/report/evidence/recording-readiness/step13-twohunk.png">hunk review screenshot</a>. <b>Task B:</b> <a href="https://github.com/Mohak-Singhal/forge/blob/main/report/evidence/taskB.patch">accepted Flask patch</a> and <a href="https://github.com/Mohak-Singhal/forge/blob/main/report/evidence/technical-depth/b1-before-after.json">context retrieval comparison</a>. <b>Task C:</b> <a href="https://github.com/Mohak-Singhal/forge/blob/main/report/evidence/taskC-cloud-editor-evidence.json">cloud failover editor evidence</a>.</p>
+<p class="muted">The public video has not been recorded, so there are no video timestamps to report.</p>
 </li>
 
-<li><h2>Tools used</h2>
+<li style="break-before: page"><h2>Tools used</h2>
 <p>Cline (upstream <code>eff43e19b</code>) for the webview/editor scaffolding · TrueForge (trueforge local) — agent loop · VS Code 1.96 extension API · Bun/Node build · Python 3.14 (flask demo, pytest 8.3.4) · macOS <code>agent-desktop</code>/CUA + Tesseract for GUI verification · ffmpeg (capture) · <code>pdftotext</code> · OpenCode (Inkling) as an AI pair during the build — all diff-reviewed against the flask suite. No other AI product participated in the judged path.</p>
 </li>
 

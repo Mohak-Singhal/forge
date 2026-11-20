@@ -17,12 +17,28 @@
 </p>
 
 <p align="center">
+  <strong>Source-run prototype</strong> · Cloud models through TrueForge · Human-reviewed edits
+</p>
+
+<p align="center">
   <img src="report/evidence/recording-readiness/step13-twohunk.png" width="920" alt="Forge showing a proposed code change with per-hunk accept and reject controls in VS Code" />
 </p>
 
 Forge is an open-source research prototype built from the Cline VS Code extension. Its agent loop runs on [TrueForge](https://github.com/truefoundry/trueforge); the extension connects the agent to the editor through loopback MCP tools and a human-reviewed diff flow.
 
 > This repository is a source-run prototype, not a Marketplace release. The extension is built and launched from this repository.
+
+## Round 1 work
+
+The fixed tasks were exercised against Flask 3.1.3. The results below are from the working editor and verification runs; a public walkthrough video has not been recorded yet.
+
+| Task | Verified result |
+|---|---|
+| **A · Inline edit** | VS Code diff review supports independent hunk acceptance and rejection. The `FLASK_DEBUG=off` check returns `False`; rejected changes leave the file unchanged. |
+| **B · Agent mode** | Forge discovered the CLI, test, and documentation files without file hints. `flask config` appeared in help, sensitive values were masked, and `tests/test_cli.py` reported 58 passed, 3 skipped. |
+| **C · Cloud failover** | With the primary endpoint unavailable, Forge switched to Groq `gpt-oss-120b`, showed a proposed hunk, and left the workspace clean after rejection. |
+
+The Task C observation is recorded in [`taskC-cloud-editor-evidence.json`](report/evidence/taskC-cloud-editor-evidence.json). The editor review is shown in [`step13-twohunk.png`](report/evidence/recording-readiness/step13-twohunk.png). The detailed retrieval trace is in [`b1-before-after.json`](report/evidence/technical-depth/b1-before-after.json). The [demo runbook](report/demo-script.md) and [Round 1 write-up](report/forge-writeup.pdf) describe the setup and evidence. The public video remains outstanding.
 
 ## Why Forge
 
@@ -84,12 +100,12 @@ bun run build:sdk
 From the repository root, start TrueForge in local mode:
 
 ```bash
-OUTBOUND_URL_ALLOWED_HOSTS='["127.0.0.1","localhost"]' npx @truefoundry/trueforge@latest
+OUTBOUND_URL_ALLOWED_HOSTS='["127.0.0.1","localhost"]' bunx @truefoundry/trueforge@0.185.1
 ```
 
 Open `http://localhost:8790/settings/models` and configure a cloud provider with an OpenAI-compatible API. Forge sends model traffic through TrueForge; it does not call model APIs directly. Keep provider keys in TrueForge's local configuration and out of this repository. Example provider shapes are in [`.trueforge/models.example.json`](.trueforge/models.example.json).
 
-The reference configuration uses an OpenCode-compatible gateway as primary and Groq Cloud as fallback. Provider availability, model names, and prices can change; configure models that are currently available to you.
+The reference configuration uses an OpenCode-compatible cloud gateway as primary and Groq Cloud as fallback. Forge uses cloud models through TrueForge; it does not require Ollama or another local model runtime. Provider availability, model names, and prices can change; configure cloud models that are currently available to you.
 
 ### Launch Forge in an Extension Development Host
 

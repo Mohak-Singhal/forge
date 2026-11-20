@@ -1,0 +1,19 @@
+{
+  "date": "2026-11-20",
+  "task": "C: cloud model failover through the Forge inline editor",
+  "primary": "opencode-free-models/deepseek-v41-flash-free",
+  "fallback": "groq/gpt-oss-120b",
+  "primaryEndpointFailure": "Cannot connect to API: bad port",
+  "uiObserved": [
+    "Forge displayed the primary model connection failure",
+    "Forge automatically switched to the Groq cloud fallback",
+    "The fallback returned a one-hunk inline edit proposal",
+    "The real VS Code hunk review UI was shown and the hunk was rejected",
+    "Forge reported that all hunks were rejected and the file was unchanged"
+  ],
+  "workspaceStatusAfterReject": "clean",
+  "primaryProviderRestored": true,
+  "cloudOnly": true,
+  "videoRecorded": false,
+  "notes": "The exact Task A prompt was used. The proposed change was not applied. The primary endpoint was restored after the run. No provider secrets are recorded here."
+}
