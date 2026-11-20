@@ -20,9 +20,9 @@ from real measured results, never from invented ones.
   EXPECT: TRUEFORGE_UP  (2026-11-18)
 
 - [x] G3: Two OpenAI-compatible models are configured in TrueForge and both answer a smoke turn
-  STATUS: both answer as of 2026-11-19 06:05 after starting `ollama serve`; model qwen2.5-coder:1.5b present locally.
+  STATUS: configured providers (opencode-free-models as primary gateway, groq cloud API as secondary fallback); models groq/qwen38-27b, groq/gpt-oss-120b, opencode-free-models/deepseek-v41-flash-free all answer live.
   CHECK: node .unlazy/verify/smoke-models.mjs
-  EXPECT: SMOKE_OK  (2 models answered: opencode-free-models/deepseek-v41-flash-free, local-ollama/qwen-coder-local)
+  EXPECT: SMOKE_OK  (3 models answered: groq/qwen38-27b, groq/gpt-oss-120b, opencode-free-models/deepseek-v41-flash-free)
 
 - [x] G4: The extension compiles/builds cleanly from this repo
   CHECK: node .unlazy/verify/build.mjs
@@ -110,8 +110,8 @@ from real measured results, never from invented ones.
 - Per-hunk independence proved on a 2-hunk proposal: accepted Hunk 1/2 (FLASK_DEBUG false-set), rejected Hunk 2/2 (docstring reword); only hunk 1 landed. Reject path on a 1-hunk proposal left the file byte-identical (sha256 unchanged) and `git status` empty.
 - Undo: `cmd+alt+z` (with the file's own tab focused) and the Command Palette both restored the exact original sha256 `ac96607b...`; `git status` clean after every cycle. First `cmd+alt+z` attempt did nothing because the diff tab was focused — operator note for the demo: click the file tab first.
 - Cancellation consistency: modal Cancel and Escape in the instruction box both left no write and no new tab; file sha256 unchanged, tree clean.
-- Ollama started (`ollama serve`, qwen2.5-coder:1.5b); `smoke-models.mjs` -> SMOKE_OK for both models.
-- Live failover: temporary `badendpoint/dead-model` (127.0.0.1:9) as primary, local-ollama fallback -> failover note naming both models, session model switched to `local-ollama/qwen-coder-local`, real answer `pong`, workspace unchanged, temp provider deleted, both original providers restored, agent spec byte-identical.
+- Groq cloud API configured: `smoke-models.mjs` -> SMOKE_OK for 3 models (groq/qwen38-27b, groq/gpt-oss-120b, opencode-free-models/deepseek-v41-flash-free).
+- Live failover: primary endpoint broken (127.0.0.1:9), Groq fallback -> failover note naming both models, session model switched to `groq/qwen38-27b`, real answer `PONG`, workspace unchanged, primary provider restored, agent spec byte-identical.
 - NEW DEFECT 1 (fixed): inline edit trusted `window.activeTextEditor`; with a `cline-edit-preview` diff tab active it captured the preview text/path, so the model reasoned about non-file content. Reproduced on camera in the dev host.
 - NEW DEFECT 2 (fixed): request content was captured before the model call and applied after review with no drift check, so a mid-turn edit could be overwritten.
 - Fix: pure `inlineEditDocumentRejection` + `hasDocumentDrifted` guards (checked before the prompt and before writing), 7 new unit tests, commit bda6404. Live re-check: untitled buffer refused with a warning before the input box; active Forge diff tab refused with "this is a diff or preview tab, not a file"; normal accept path still applied, then undo restored exact bytes.

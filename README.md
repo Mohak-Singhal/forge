@@ -44,17 +44,16 @@ the agent surfaces a clear error. The loopback allowlist is required for the edi
 tools to reach the agent.
 
 TrueForge listens on `http://localhost:8790`. Open `http://localhost:8790/settings/models`
-and register a provider — a gateway, a free tier, or a model running locally behind an
+and register a provider — a gateway, a free tier, or a cloud model provider behind an
 OpenAI-compatible endpoint. See [`.trueforge/models.example.json`](./.trueforge/models.example.json)
-for importable examples (Ollama, and a generic OpenAI-compatible entry with a primary and
+for importable examples (Groq, and a generic OpenAI-compatible gateway with a primary and
 a fallback model). **The extension never calls a model provider directly; all model
 traffic goes through TrueForge.** Keys live only in the TrueForge server's config —
 never in this repository.
 
-For the reference development run, we used a custom OpenAI-compatible provider
-(`opencode-free-models`, free gateway) with two models: `deepseek-v41-flash-free`
-(primary) and `qwen-coder-local` (fallback, Ollama `qwen2.5-coder:1.5b` on
-`127.0.0.1:11434`). These are exactly the names in
+For the reference development run, we configured a primary OpenAI-compatible provider
+(`opencode-free-models`, gateway) with `deepseek-v41-flash-free` and a secondary cloud provider
+(`groq`, with `qwen/qwen3.8-27b` mapped as `qwen38-27b`). These are exactly the names in
 [`.trueforge/agents/forge-editor.json`](./.trueforge/agents/forge-editor.json).
 Approximate cost: $0.
 

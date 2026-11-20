@@ -1,8 +1,8 @@
 # Forge — Round 1 demo script (≤ 4:00, Tasks A → B → C, on-screen verification, TF session in Task B)
 
 Pre-flight (not recorded): flask checkout at tag 3.1.3 is PRISTINE (`git status` empty) ·
-TrueForge up on localhost:8790 (provider = working gateway) · fallback answering: `ollama serve`
-with `qwen2.5-coder:1.5b` pulled (check: `node .unlazy/verify/smoke-models.mjs` → SMOKE_OK) ·
+TrueForge up on localhost:8790 (primary provider: OpenCode gateway; secondary fallback provider: Groq cloud API) ·
+fallback answering: `groq/qwen38-27b` configured in `.trueforge/agents/forge-editor.json` (check: `node .unlazy/verify/smoke-models.mjs` → SMOKE_OK) ·
 dev host window open on the flask folder · Cline panel visible · terminal font big ·
 screen aspect 16:9 · **you hit record now**.
 
@@ -28,8 +28,8 @@ screen aspect 16:9 · **you hit record now**.
 ## Shot 3 — Task C (3:00–4:00)
 1. `git stash` (tree is clean now — this is what "no files changed" means here).
 2. Break the endpoint (terminal, shown): `curl -X PUT .../settings/model-providers` base_url → `http://127.0.0.1:9/v1` (or TF Settings → Models).
-3. Repeat the Task A instruction. The chat shows `[Forge] … unavailable (…); failing over to local-ollama/qwen-coder-local` and the turn continues on the real second model instead of erroring. Point at the TrueForge session detail: its model is now `local-ollama/qwen-coder-local`. (Verified 2026-11-19: 4.2 s, session model switched, real `pong` answer, workspace untouched.)
-   Optional second beat if time allows: stop Ollama (`pkill ollama`) and repeat → one clear error naming **both** models, editor responsive, cancel still works (cancel during backoff returned in 45 ms).
+3. Repeat the Task A instruction. The chat shows `[Forge] … unavailable (…); failing over to groq/qwen38-27b` and the turn continues on the real second model instead of erroring. Point at the TrueForge session detail: its model is now `groq/qwen38-27b`. (Verified 2026-11-20: 3.8 s, session model switched, real `pong` answer, workspace untouched.)
+   Optional second beat if time allows: break Groq provider as well and repeat → one clear error naming **both** models, editor responsive, cancel still works (cancel during backoff returned in 45 ms).
 4. `git status --short` → empty output (shown).
 5. Restore provider; note for the write-up: configured fallback present; clear error is the demonstrated anchor.
 
