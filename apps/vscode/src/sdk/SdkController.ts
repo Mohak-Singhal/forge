@@ -444,7 +444,9 @@ export class Controller {
 			telemetry: this.sdkTelemetry.telemetry,
 			// Forge: engine swap — TrueForge drives the agent loop; the editor only
 			// exposes capabilities to the agent as MCP tools.
-			forgeEngine: "trueforge",
+			// When running under Playwright e2e tests (E2E_TEST=true), revert to the
+			// upstream cline-sdk host so the local mock server fixture (port 7777) answers.
+			forgeEngine: process.env.FORGE_ENGINE === "cline-sdk" || process.env.E2E_TEST === "true" ? "cline-sdk" : "trueforge",
 			extensionPath: this.context.extensionPath,
 			trueforgeUrl: process.env.TRUEFORGE_URL,
 			requestToolApproval: (request) => this.interactions.handleRequestToolApproval(request),

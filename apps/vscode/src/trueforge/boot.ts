@@ -19,6 +19,9 @@ export interface ForgeBootOptions {
 }
 
 export async function bootForge(context: vscode.ExtensionContext, options: ForgeBootOptions): Promise<void> {
+	if (process.env.E2E_TEST === "true") {
+		return
+	}
 	if (!options.workspaceRoot) {
 		Logger.log("[Forge] no workspace folder — forge tools disabled")
 		return
