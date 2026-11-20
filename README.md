@@ -24,7 +24,7 @@ The agent definition used by this extension lives at
 Flask demo repository), VS Code ≥ 1.96, git.
 
 ```bash
-git clone https://github.com/<owner>/<repo>.git && cd <repo>
+git clone https://github.com/Mohak-Singhal/forge.git && cd forge
 bun install
 bun run build:sdk            # SDK packages resolve via compiled dist/
 cd apps/vscode
