@@ -98,6 +98,11 @@
 
 <li><h2>Known limitations &amp; what we'd do with another month</h2>
 <ul>
-<li><b>Undo granularity. editor_undo_last_edit is byte-exact and LIFO, and now refuses if the file changed after the edit, so it cannot clobber a newer manual change. It still restores a whole proposal rather than a single hunk. Another month: per-hunk undo replay against the working tree.</p>
+<li><b>Undo granularity.</b> <code>editor_undo_last_edit</code> is byte-exact and LIFO, and refuses if the file changed after the edit. It currently restores a whole proposal rather than a single hunk. Another month: per-hunk undo replay against working tree.</li>
+<li><b>Loopback MCP auth.</b> Bound to 127.0.0.1 with TrueForge egress allowlist. Sufficient for single-user local host; multi-user environments would benefit from per-session tokenized auth.</li>
+<li><b>Harness snapshots.</b> Upstream Cline checkpoints do not span external agent runs; our undo tool handles file restoration. Another month: bridge TrueForge's snapshot API for full workspace checkpoints.</li>
+</ul>
+</li>
+</ol>
 </body>
 </html>
